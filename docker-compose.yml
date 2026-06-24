@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: job_scanner
+      POSTGRES_USER: job_scanner
+      POSTGRES_PASSWORD: job_scanner
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U job_scanner -d job_scanner"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/job_scanner
+      SPRING_DATASOURCE_USERNAME: job_scanner
+      SPRING_DATASOURCE_PASSWORD: job_scanner
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CANDIDATE_PROFILE_PATH: classpath:candidate-profile.md
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres-data:

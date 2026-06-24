@@ -1,0 +1,208 @@
+databaseChangeLog:
+  - changeSet:
+      id: 000-create-schema
+      author: codex
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: CREATE SCHEMA IF NOT EXISTS ${db-schema}
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: DROP SCHEMA IF EXISTS ${db-schema} CASCADE
+  - changeSet:
+      id: 001-create-job-offer
+      author: codex
+      changes:
+        - createTable:
+            schemaName: ${db-schema}
+            tableName: job_offer
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: source
+                  type: VARCHAR(120)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: title
+                  type: VARCHAR(300)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: company
+                  type: VARCHAR(240)
+              - column:
+                  name: location
+                  type: VARCHAR(240)
+              - column:
+                  name: remote_type
+                  type: VARCHAR(40)
+              - column:
+                  name: contract_type
+                  type: VARCHAR(40)
+              - column:
+                  name: description
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: job_url
+                  type: VARCHAR(1000)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: detected_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(40)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: match_score
+                  type: INT
+              - column:
+                  name: match_explanation
+                  type: TEXT
+              - column:
+                  name: rate_or_salary
+                  type: NUMERIC(12,2)
+  - changeSet:
+      id: 002-create-application-draft
+      author: codex
+      changes:
+        - createTable:
+            schemaName: ${db-schema}
+            tableName: application_draft
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: job_offer_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    unique: true
+                    foreignKeyName: fk_application_draft_job_offer
+                    references: ${db-schema}.job_offer(id)
+              - column:
+                  name: anschreiben_text
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: cv_file_path
+                  type: VARCHAR(1000)
+              - column:
+                  name: cv_document_id
+                  type: VARCHAR(200)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: sent_at
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: status
+                  type: VARCHAR(40)
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: 003-create-search-criteria
+      author: codex
+      changes:
+        - createTable:
+            schemaName: ${db-schema}
+            tableName: job_search_criteria
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(200)
+              - column:
+                  name: keyword
+                  type: VARCHAR(240)
+              - column:
+                  name: location
+                  type: VARCHAR(240)
+              - column:
+                  name: remote_type
+                  type: VARCHAR(40)
+              - column:
+                  name: contract_type
+                  type: VARCHAR(40)
+              - column:
+                  name: min_rate
+                  type: NUMERIC(12,2)
+              - column:
+                  name: language
+                  type: VARCHAR(80)
+              - column:
+                  name: source_website
+                  type: VARCHAR(120)
+              - column:
+                  name: active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: 004-seed-default-criteria
+      author: codex
+      changes:
+        - insert:
+            schemaName: ${db-schema}
+            tableName: job_search_criteria
+            columns:
+              - column:
+                  name: name
+                  value: Java Spring Remote
+              - column:
+                  name: keyword
+                  value: Java Spring Boot
+              - column:
+                  name: location
+                  value: Remote
+              - column:
+                  name: remote_type
+                  value: REMOTE
+              - column:
+                  name: contract_type
+                  value: FREELANCE
+              - column:
+                  name: min_rate
+                  valueNumeric: 750
+              - column:
+                  name: language
+                  value: Deutsch
+              - column:
+                  name: source_website
+                  value: mock
+              - column:
+                  name: active
+                  valueBoolean: true

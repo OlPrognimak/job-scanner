@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: job-scanner
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/job_scanner}
+    username: ${SPRING_DATASOURCE_USERNAME:job_scanner}
+    password: ${SPRING_DATASOURCE_PASSWORD:job_scanner}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: ${DB_SCHEMA:job_scanner}
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yml
+    parameters:
+      db-schema: ${DB_SCHEMA:job_scanner}
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      chat:
+        options:
+          model: ${OPENAI_MODEL:gpt-4o-mini}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+job-scanner:
+  candidate-profile-path: ${CANDIDATE_PROFILE_PATH:classpath:candidate-profile.md}
+  scanners:
+    enabled: ${SCANNERS_ENABLED:mock,freelancermap,stepstone}
