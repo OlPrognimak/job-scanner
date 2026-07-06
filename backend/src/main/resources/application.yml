@@ -2,9 +2,9 @@ spring:
   application:
     name: job-scanner
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/job_scanner}
-    username: ${SPRING_DATASOURCE_USERNAME:job_scanner}
-    password: ${SPRING_DATASOURCE_PASSWORD:job_scanner}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5455/test_db}
+    username: ${SPRING_DATASOURCE_USERNAME:test}
+    password: ${SPRING_DATASOURCE_PASSWORD:test}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -16,12 +16,13 @@ spring:
     change-log: classpath:db/changelog/db.changelog-master.yml
     parameters:
       db-schema: ${DB_SCHEMA:job_scanner}
+      text-type: ${DB_TEXT_TYPE:TEXT}
   ai:
     openai:
       api-key: ${OPENAI_API_KEY:}
       chat:
         options:
-          model: ${OPENAI_MODEL:gpt-4o-mini}
+          model: ${OPENAI_MODEL:gpt-5-mini}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -30,3 +31,11 @@ job-scanner:
   candidate-profile-path: ${CANDIDATE_PROFILE_PATH:classpath:candidate-profile.md}
   scanners:
     enabled: ${SCANNERS_ENABLED:mock,freelancermap,stepstone}
+    freelancermap:
+      base-url: ${FREELANCERMAP_BASE_URL:https://www.freelancermap.de}
+      search-path: ${FREELANCERMAP_SEARCH_PATH:/projektboerse.html}
+      enabled: ${FREELANCERMAP_ENABLED:true}
+      max-pages: ${FREELANCERMAP_MAX_PAGES:1}
+      max-details: ${FREELANCERMAP_MAX_DETAILS:10}
+      request-delay-ms: ${FREELANCERMAP_REQUEST_DELAY_MS:1500}
+      user-agent: ${FREELANCERMAP_USER_AGENT:Mozilla/5.0 JobScannerBot/1.0}

@@ -107,7 +107,21 @@ frontend/src
 ## Scanner Implementations
 
 - `MockJobSourceScanner`: returns mock jobs for first tests.
-- `FreelancermapScanner`: source adapter skeleton.
+- `FreelancermapScanner`: fetches freelancermap search pages, extracts project detail links, parses detail pages with JSoup, and returns normalized job offers.
 - `StepStoneScanner`: source adapter skeleton.
 
 Real scanners should keep source-specific parsing, rate limiting, and legal/policy handling inside scanner implementations, not controllers.
+
+To scan freelancermap manually, create or update a search criterion with:
+
+```text
+sourceWebsite = freelancermap
+```
+
+Useful environment settings:
+
+```bash
+FREELANCERMAP_MAX_PAGES=1
+FREELANCERMAP_MAX_DETAILS=10
+FREELANCERMAP_REQUEST_DELAY_MS=1500
+```
