@@ -19,10 +19,12 @@ The application never sends CVs or Anschreiben automatically. AI can only create
 docker compose up --build
 ```
 
+Docker activates the Spring `docker` profile automatically. That profile uses the Compose service name `postgres` for the database connection.
+
 Services:
 
 - Frontend: http://localhost:8081
-- Backend: http://localhost:8080
+- Backend: http://localhost:8088
 - PostgreSQL: localhost:5432
 
 Optional AI configuration:
@@ -36,6 +38,8 @@ Without a working OpenAI key, the backend falls back to a deterministic draft an
 
 ## Local Development
 
+By default, no Spring profile is active. The backend uses [application.yml](backend/src/main/resources/application.yml), which is intended for running without Docker and points at a PostgreSQL instance on `localhost`.
+
 Start PostgreSQL:
 
 ```bash
@@ -48,6 +52,15 @@ Run backend:
 cd backend
 mvn spring-boot:run
 ```
+
+Run backend with the Maven `docker` profile:
+
+```bash
+cd backend
+mvn -Pdocker spring-boot:run
+```
+
+If you want to run the backend against the Docker Compose database while still starting the backend from your IDE or Maven, use the default local profile and point `SPRING_DATASOURCE_URL` at `localhost`.
 
 Run frontend:
 

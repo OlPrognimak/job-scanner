@@ -121,4 +121,19 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>local</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+        </profile>
+        <profile>
+            <id>docker</id>
+            <properties>
+                <spring-boot.run.profiles>docker</spring-boot.run.profiles>
+            </properties>
+        </profile>
+    </profiles>
 </project>

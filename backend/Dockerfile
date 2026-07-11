@@ -8,5 +8,6 @@ RUN mvn -q -DskipTests package
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY --from=build /workspace/target/job-scanner-backend-1.0.0-SNAPSHOT.jar app.jar
-EXPOSE 8080
+EXPOSE 8088
+ENV SPRING_PROFILES_ACTIVE=docker
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

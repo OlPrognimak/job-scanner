@@ -1,0 +1,11 @@
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/job_scanner}
+    username: ${SPRING_DATASOURCE_USERNAME:job_scanner}
+    password: ${SPRING_DATASOURCE_PASSWORD:job_scanner}
+
+server:
+  port: ${SERVER_PORT:8088}

@@ -19,13 +19,12 @@ services:
     build:
       context: ./backend
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/job_scanner
-      SPRING_DATASOURCE_USERNAME: job_scanner
-      SPRING_DATASOURCE_PASSWORD: job_scanner
+      SPRING_PROFILES_ACTIVE: docker
+      SERVER_PORT: 8088
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       CANDIDATE_PROFILE_PATH: classpath:candidate-profile.md
     ports:
-      - "8080:8080"
+      - "8088:8088"
     depends_on:
       postgres:
         condition: service_healthy
