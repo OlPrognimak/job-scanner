@@ -12,5 +12,6 @@ public interface JobSearchCriteriaMapper {
     JobSearchCriteriaDto toDto(JobSearchCriteria criteria);
 
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "country", ignore = true)
     void updateEntity(JobSearchCriteriaDto dto, @MappingTarget JobSearchCriteria criteria);
 }

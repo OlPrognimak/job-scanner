@@ -22,9 +22,15 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       SERVER_PORT: 8088
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ADZUNA_APP_ID: ${ADZUNA_APP_ID:-}
+      ADZUNA_APP_KEY: ${ADZUNA_APP_KEY:-}
       CANDIDATE_PROFILE_PATH: classpath:candidate-profile.md
+      CANDIDATE_CONTEXT_PATH: file:/app/documents/candidate-context.md
+      CV_FILE_PATH: /app/documents/cv.docx
     ports:
       - "8088:8088"
+    volumes:
+      - ./documents:/app/documents:ro
     depends_on:
       postgres:
         condition: service_healthy

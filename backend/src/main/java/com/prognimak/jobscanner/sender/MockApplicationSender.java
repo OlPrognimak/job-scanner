@@ -12,6 +12,7 @@ public class MockApplicationSender implements ApplicationSender {
 
     @Override
     public void send(ApplicationDraft draft) {
-        log.info("Mock send for draft {} and job {}", draft.getId(), draft.getJobOffer().getId());
+        log.info("Mock send for draft {}, job {} and CV {}", draft.getId(), draft.getJobOffer().getId(),
+                draft.getCvFilePath());
     }
 }

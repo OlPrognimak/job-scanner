@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.math.BigDecimal;
 
 @Entity
@@ -34,6 +35,9 @@ public class JobSearchCriteria {
     private String language;
 
     private String sourceWebsite;
+
+    @Transient
+    private String country;
 
     private boolean active = true;
 
@@ -107,6 +111,14 @@ public class JobSearchCriteria {
 
     public void setSourceWebsite(String sourceWebsite) {
         this.sourceWebsite = sourceWebsite;
+    }
+
+    public String getCountry() {
+        return country;
+    }
+
+    public void setCountry(String country) {
+        this.country = country;
     }
 
     public boolean isActive() {

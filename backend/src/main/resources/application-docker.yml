@@ -9,3 +9,7 @@ spring:
 
 server:
   port: ${SERVER_PORT:8088}
+
+job-scanner:
+  candidate-context-path: ${CANDIDATE_CONTEXT_PATH:file:/app/documents/candidate-context.md}
+  cv-file-path: ${CV_FILE_PATH:/app/documents/cv.docx}

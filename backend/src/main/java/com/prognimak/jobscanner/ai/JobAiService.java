@@ -31,6 +31,8 @@ public class JobAiService {
                             Du bist ein Bewerbungsassistent fuer deutsche Bewerbungen.
                             Du bewertest Job-Fit und erstellst nur Entwuerfe.
                             Du darfst niemals behaupten, dass eine Bewerbung versendet wurde.
+                            Stelle Technologien, die im Kandidatenprofil als Erfahrung genannt sind, niemals als fehlende praktische Erfahrung dar.
+                            Wenn einzelne Job-Technologien nicht im Kandidatenprofil stehen, nenne sie hoechstens neutral als angrenzende oder vertiefbare Themen.
                             Antworte exakt in drei Abschnitten:
                             MATCH_SCORE: <Zahl 0-100>
                             MATCH_EXPLANATION: <kurze deutsche Begruendung>

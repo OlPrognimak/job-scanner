@@ -31,6 +31,7 @@ Optional AI configuration:
 
 ```bash
 export OPENAI_API_KEY=...
+export OPENAI_MODEL=gpt-5-mini
 docker compose up --build
 ```
 
@@ -121,6 +122,8 @@ frontend/src
 
 - `MockJobSourceScanner`: returns mock jobs for first tests.
 - `FreelancermapScanner`: fetches freelancermap search pages, extracts project detail links, parses detail pages with JSoup, and returns normalized job offers.
+- `AdzunaScanner`: calls the official Adzuna REST API and maps JSON job ads into normalized job offers.
+- `GlassdoorScanner`: fetches Glassdoor search result pages, extracts job detail links, parses detail pages with JSoup, and returns normalized job offers when Glassdoor provides server-rendered HTML.
 - `StepStoneScanner`: source adapter skeleton.
 
 Real scanners should keep source-specific parsing, rate limiting, and legal/policy handling inside scanner implementations, not controllers.
@@ -131,10 +134,79 @@ To scan freelancermap manually, create or update a search criterion with:
 sourceWebsite = freelancermap
 ```
 
+To scan Glassdoor manually, create or update a search criterion with:
+
+```text
+sourceWebsite = glassdoor
+```
+
+One search criterion can scan multiple sources. The frontend stores the selected sources as a comma-separated value:
+
+```text
+sourceWebsite = glassdoor,freelancermap
+```
+
+To scan Adzuna, register for API credentials at https://developer.adzuna.com/ and set:
+
+```bash
+ADZUNA_APP_ID=...
+ADZUNA_APP_KEY=...
+ADZUNA_COUNTRY=de
+ADZUNA_RESULTS_PER_PAGE=10
+ADZUNA_REQUEST_TIMEOUT_SECONDS=15
+```
+
+Then use:
+
+```text
+sourceWebsite = adzuna
+```
+
+### Getting Adzuna API Credentials
+
+1. Open https://developer.adzuna.com/.
+2. Create an Adzuna developer account or sign in.
+3. Register a new application in the developer dashboard.
+4. Copy the generated `app_id` and `app_key`.
+5. Set the credentials before starting the backend:
+
+```bash
+export ADZUNA_APP_ID=your_app_id
+export ADZUNA_APP_KEY=your_app_key
+export ADZUNA_COUNTRY=de
+```
+
+For Docker:
+
+```bash
+ADZUNA_APP_ID=your_app_id ADZUNA_APP_KEY=your_app_key docker compose up --build
+```
+
+For IntelliJ, add these environment variables to the backend run configuration:
+
+```text
+ADZUNA_APP_ID=your_app_id
+ADZUNA_APP_KEY=your_app_key
+ADZUNA_COUNTRY=de
+```
+
 Useful environment settings:
 
 ```bash
 FREELANCERMAP_MAX_PAGES=1
 FREELANCERMAP_MAX_DETAILS=10
-FREELANCERMAP_REQUEST_DELAY_MS=1500
+FREELANCERMAP_MAX_CANDIDATES=20
+FREELANCERMAP_MAX_PARALLEL_DETAIL_REQUESTS=6
+FREELANCERMAP_REQUEST_DELAY_MS=250
+FREELANCERMAP_REQUEST_TIMEOUT_SECONDS=15
+```
+
+The freelancermap scanner sends `keyword` to freelancermap as the portal search query and trusts the returned result set for keyword relevance. Local filtering is only applied for structured fields such as remote type, contract type, and location.
+
+Glassdoor can serve limited, login-gated, JavaScript-heavy pages, or a `Security | Glassdoor` 403 page depending on request context. The scanner works with public server-rendered result cards and skips cleanly when Glassdoor blocks the request.
+
+By default, the scan does not run Spring AI matching for every imported job because that makes API-based scans feel slow. Generate an Anschreiben from the job details page to run AI for a selected job. If you want match scoring during every scan, set:
+
+```bash
+AI_MATCHING_DURING_SCAN=true
 ```

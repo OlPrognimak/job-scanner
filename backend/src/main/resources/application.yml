@@ -2,9 +2,9 @@ spring:
   application:
     name: job-scanner
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/job_scanner}
-    username: ${SPRING_DATASOURCE_USERNAME:job_scanner}
-    password: ${SPRING_DATASOURCE_PASSWORD:job_scanner}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5455/test_db}
+    username: ${SPRING_DATASOURCE_USERNAME:test}
+    password: ${SPRING_DATASOURCE_PASSWORD:test}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -29,13 +29,38 @@ server:
 
 job-scanner:
   candidate-profile-path: ${CANDIDATE_PROFILE_PATH:classpath:candidate-profile.md}
+  candidate-context-path: ${CANDIDATE_CONTEXT_PATH:file:../documents/candidate-context.md}
+  cv-file-path: ${CV_FILE_PATH:../documents/cv.docx}
+  ai-matching-during-scan: ${AI_MATCHING_DURING_SCAN:false}
   scanners:
-    enabled: ${SCANNERS_ENABLED:mock,freelancermap,stepstone}
+    enabled: ${SCANNERS_ENABLED:mock,freelancermap,adzuna,glassdoor,stepstone}
     freelancermap:
       base-url: ${FREELANCERMAP_BASE_URL:https://www.freelancermap.de}
-      search-path: ${FREELANCERMAP_SEARCH_PATH:/projektboerse.html}
+      search-path: ${FREELANCERMAP_SEARCH_PATH:/projekte}
       enabled: ${FREELANCERMAP_ENABLED:true}
       max-pages: ${FREELANCERMAP_MAX_PAGES:1}
-      max-details: ${FREELANCERMAP_MAX_DETAILS:10}
-      request-delay-ms: ${FREELANCERMAP_REQUEST_DELAY_MS:1500}
+      max-details: ${FREELANCERMAP_MAX_DETAILS:25}
+      max-candidates: ${FREELANCERMAP_MAX_CANDIDATES:20}
+      max-parallel-detail-requests: ${FREELANCERMAP_MAX_PARALLEL_DETAIL_REQUESTS:6}
+      request-delay-ms: ${FREELANCERMAP_REQUEST_DELAY_MS:250}
+      request-timeout-seconds: ${FREELANCERMAP_REQUEST_TIMEOUT_SECONDS:15}
       user-agent: ${FREELANCERMAP_USER_AGENT:Mozilla/5.0 JobScannerBot/1.0}
+    glassdoor:
+      base-url: ${GLASSDOOR_BASE_URL:https://www.glassdoor.de}
+      search-path: ${GLASSDOOR_SEARCH_PATH:/Job/jobs.htm}
+      enabled: ${GLASSDOOR_ENABLED:true}
+      max-pages: ${GLASSDOOR_MAX_PAGES:1}
+      max-details: ${GLASSDOOR_MAX_DETAILS:25}
+      max-candidates: ${GLASSDOOR_MAX_CANDIDATES:40}
+      max-parallel-detail-requests: ${GLASSDOOR_MAX_PARALLEL_DETAIL_REQUESTS:4}
+      request-delay-ms: ${GLASSDOOR_REQUEST_DELAY_MS:1000}
+      user-agent: ${GLASSDOOR_USER_AGENT:Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36}
+    adzuna:
+      base-url: ${ADZUNA_BASE_URL:https://api.adzuna.com}
+      country: ${ADZUNA_COUNTRY:nl}
+      app-id: ${ADZUNA_APP_ID:}
+      app-key: ${ADZUNA_APP_KEY:}
+      enabled: ${ADZUNA_ENABLED:true}
+      max-pages: ${ADZUNA_MAX_PAGES:1}
+      results-per-page: ${ADZUNA_RESULTS_PER_PAGE:25}
+      request-timeout-seconds: ${ADZUNA_REQUEST_TIMEOUT_SECONDS:30}

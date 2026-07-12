@@ -4,9 +4,11 @@ import com.prognimak.jobscanner.dto.ApplicationDraftDto;
 import com.prognimak.jobscanner.dto.JobOfferDto;
 import com.prognimak.jobscanner.dto.ScanRequest;
 import com.prognimak.jobscanner.dto.ScanResultDto;
+import com.prognimak.jobscanner.entity.JobSearchCriteria;
 import com.prognimak.jobscanner.mapper.ApplicationDraftMapper;
 import com.prognimak.jobscanner.mapper.JobOfferMapper;
 import com.prognimak.jobscanner.service.ApplicationDraftService;
+import com.prognimak.jobscanner.service.JobScanResult;
 import com.prognimak.jobscanner.service.JobScannerService;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,10 +48,50 @@ public class JobController {
     @PostMapping("/scan")
     public ScanResultDto scan(@RequestBody(required = false) ScanRequest request) {
         Long criteriaId = request == null ? null : request.criteriaId();
-        List<JobOfferDto> jobs = jobScannerService.scan(criteriaId).stream()
+        JobScanResult result = criteriaId == null && hasAdHocCriteria(request)
+                ? jobScannerService.scan(toCriteria(request))
+                : jobScannerService.scan(criteriaId);
+        List<JobOfferDto> jobs = result.jobs().stream()
                 .map(jobOfferMapper::toDto)
                 .toList();
-        return new ScanResultDto(jobs.size(), jobs);
+        return new ScanResultDto(jobs.size(), jobs, result.messages());
+    }
+
+    private boolean hasAdHocCriteria(ScanRequest request) {
+        return request != null
+                && (hasText(request.keyword())
+                || hasText(request.country())
+                || hasText(request.location())
+                || hasText(request.sourceWebsite()));
+    }
+
+    private JobSearchCriteria toCriteria(ScanRequest request) {
+        JobSearchCriteria criteria = new JobSearchCriteria();
+        criteria.setName("Ad-hoc scan");
+        criteria.setKeyword(request.keyword());
+        criteria.setCountry(request.country());
+        criteria.setLocation(normalizeLocation(request.location()));
+        criteria.setSourceWebsite(request.sourceWebsite());
+        criteria.setActive(true);
+        return criteria;
+    }
+
+    private String normalizeLocation(String location) {
+        if (!hasText(location)) {
+            return null;
+        }
+        String normalized = location.trim().toLowerCase();
+        if (normalized.equals("de")
+                || normalized.equals("deutschland")
+                || normalized.equals("germany")
+                || normalized.equals("germania")) {
+            return null;
+        }
+        return location.trim();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     @PostMapping("/{id}/generate-anschreiben")

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { generateAnschreiben, getDraft, getJob, sendDraft, updateDraft } from '../api/jobs'
 import LoadingError from '../components/LoadingError.vue'
 import StatusBadge from '../components/StatusBadge.vue'
@@ -13,6 +13,20 @@ const loading = ref(false)
 const error = ref('')
 const saving = ref(false)
 const sending = ref(false)
+const generating = ref(false)
+
+const formattedDescription = computed(() => formatDescription(job.value?.description ?? ''))
+const jobFacts = computed(() => {
+  if (!job.value) return []
+  return [
+    { label: 'Firma', value: job.value.company },
+    { label: 'Ort', value: job.value.location },
+    { label: 'Remote', value: job.value.remoteType },
+    { label: 'Vertrag', value: job.value.contractType },
+    { label: 'Quelle', value: job.value.source },
+    { label: 'Verguetung', value: job.value.rateOrSalary ? String(job.value.rateOrSalary) : undefined }
+  ].filter((item) => item.value)
+})
 
 async function load() {
   loading.value = true
@@ -32,8 +46,16 @@ async function load() {
 }
 
 async function generate() {
-  draft.value = await generateAnschreiben(Number(props.id))
-  job.value = await getJob(Number(props.id))
+  generating.value = true
+  error.value = ''
+  try {
+    draft.value = await generateAnschreiben(Number(props.id))
+    job.value = await getJob(Number(props.id))
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Anschreiben konnte nicht generiert werden.'
+  } finally {
+    generating.value = false
+  }
 }
 
 async function save() {
@@ -58,6 +80,26 @@ async function send() {
   }
 }
 
+function formatDescription(description: string) {
+  const normalized = description
+    .replace(/\r/g, '')
+    .replace(/\t/g, ' ')
+    .replace(/([.!?])\s+(?=[A-ZÄÖÜ])/g, '$1\n')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+
+  if (!normalized) return []
+
+  return normalized
+    .split(/\n{1,}|\s(?=(?:Aufgaben|Anforderungen|Profil|Rahmenbedingungen|Skills|Beschreibung|Projekt|Start|Dauer|Ort|Remote|Kontakt):)/gi)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((text) => ({
+      text: text.replace(/^[-•]\s*/, ''),
+      bullet: /^[-•]/.test(text) || /^[A-ZÄÖÜ][A-Za-zÄÖÜäöüß\s]+:/.test(text)
+    }))
+}
+
 onMounted(load)
 </script>
 
@@ -69,23 +111,46 @@ onMounted(load)
       <div class="page-header compact">
         <div>
           <h1>{{ job.title }}</h1>
-          <p>{{ job.company }} · {{ job.location }} · {{ job.source }}</p>
+          <p>{{ job.company || 'Unbekannte Firma' }} · {{ job.location || 'Ort nicht angegeben' }}</p>
         </div>
         <StatusBadge :status="job.status" />
       </div>
 
-      <div class="meta-row">
-        <span>{{ job.remoteType }}</span>
-        <span>{{ job.contractType }}</span>
-        <span>Match {{ job.matchScore ?? '-' }}/100</span>
+      <div class="details-actions">
+        <a :href="job.jobUrl" target="_blank" rel="noreferrer">Original job oeffnen</a>
+      </div>
+
+      <div class="facts-grid">
+        <div v-for="fact in jobFacts" :key="fact.label" class="fact-item">
+          <span>{{ fact.label }}</span>
+          <strong>{{ fact.value }}</strong>
+        </div>
+        <div class="fact-item">
+          <span>Match</span>
+          <strong>{{ job.matchScore ?? '-' }}/100</strong>
+        </div>
+      </div>
+
+      <div class="match-panel">
+        <div>
+          <span>Matching</span>
+          <strong>{{ job.matchScore ?? '-' }}/100</strong>
+        </div>
+        <p>{{ job.matchExplanation ?? 'Noch keine Matching-Erklaerung vorhanden.' }}</p>
+      </div>
+
+      <div class="section-title description-title">
+        <h2>Beschreibung</h2>
         <a :href="job.jobUrl" target="_blank" rel="noreferrer">Original job</a>
       </div>
 
-      <h2>Beschreibung</h2>
-      <p class="job-description">{{ job.description }}</p>
-
-      <h2>Matching</h2>
-      <p>{{ job.matchExplanation ?? 'Noch keine Matching-Erklaerung vorhanden.' }}</p>
+      <div class="job-description formatted">
+        <p v-if="!formattedDescription.length" class="muted">Keine Beschreibung vorhanden.</p>
+        <template v-for="(block, index) in formattedDescription" :key="`${index}-${block.text}`">
+          <div v-if="block.bullet" class="description-bullet">{{ block.text }}</div>
+          <p v-else>{{ block.text }}</p>
+        </template>
+      </div>
     </section>
 
     <section class="draft-panel">
@@ -94,7 +159,9 @@ onMounted(load)
         <StatusBadge v-if="draft" :status="draft.status" />
       </div>
 
-      <button v-if="!draft" class="primary full" @click="generate">Anschreiben generieren</button>
+      <button v-if="!draft" class="primary full" :disabled="generating" @click="generate">
+        {{ generating ? 'Anschreiben wird generiert...' : 'Anschreiben generieren' }}
+      </button>
 
       <template v-else>
         <textarea v-model="draft.anschreibenText" rows="20" />

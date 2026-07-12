@@ -2,6 +2,7 @@ package com.prognimak.jobscanner.service;
 
 import com.prognimak.jobscanner.ai.AiApplicationSuggestion;
 import com.prognimak.jobscanner.ai.JobAiService;
+import com.prognimak.jobscanner.config.JobScannerProperties;
 import com.prognimak.jobscanner.dto.ApplicationDraftUpdateRequest;
 import com.prognimak.jobscanner.entity.ApplicationDraft;
 import com.prognimak.jobscanner.entity.DraftStatus;
@@ -21,13 +22,16 @@ public class ApplicationDraftService {
     private final JobOfferRepository jobOfferRepository;
     private final JobAiService jobAiService;
     private final ApplicationSender applicationSender;
+    private final JobScannerProperties properties;
 
     public ApplicationDraftService(ApplicationDraftRepository draftRepository, JobOfferRepository jobOfferRepository,
-                                   JobAiService jobAiService, ApplicationSender applicationSender) {
+                                   JobAiService jobAiService, ApplicationSender applicationSender,
+                                   JobScannerProperties properties) {
         this.draftRepository = draftRepository;
         this.jobOfferRepository = jobOfferRepository;
         this.jobAiService = jobAiService;
         this.applicationSender = applicationSender;
+        this.properties = properties;
     }
 
     @Transactional
@@ -41,6 +45,9 @@ public class ApplicationDraftService {
         ApplicationDraft draft = draftRepository.findByJobOfferId(jobOfferId).orElseGet(ApplicationDraft::new);
         draft.setJobOffer(jobOffer);
         draft.setAnschreibenText(suggestion.anschreibenText());
+        if (draft.getCvFilePath() == null || draft.getCvFilePath().isBlank()) {
+            draft.setCvFilePath(properties.getCvFilePath());
+        }
         draft.setStatus(DraftStatus.DRAFT);
         jobOfferRepository.save(jobOffer);
         return draftRepository.save(draft);
@@ -62,6 +69,9 @@ public class ApplicationDraftService {
     @Transactional
     public ApplicationDraft sendManuallyConfirmed(Long id) {
         ApplicationDraft draft = draftRepository.findById(id).orElseThrow();
+        if (draft.getCvFilePath() == null || draft.getCvFilePath().isBlank()) {
+            draft.setCvFilePath(properties.getCvFilePath());
+        }
         applicationSender.send(draft);
         draft.setStatus(DraftStatus.SENT);
         draft.setSentAt(Instant.now());

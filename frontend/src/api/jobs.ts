@@ -4,6 +4,15 @@ import type { ApplicationDraft, JobOffer } from '../types/job'
 export interface ScanResult {
   importedCount: number
   jobs: JobOffer[]
+  messages: string[]
+}
+
+export interface ScanRequest {
+  criteriaId?: number | null
+  keyword?: string
+  country?: string
+  location?: string
+  sourceWebsite?: string
 }
 
 export function listJobs() {
@@ -14,10 +23,10 @@ export function getJob(id: number) {
   return apiRequest<JobOffer>(`/api/jobs/${id}`)
 }
 
-export function scanJobs(criteriaId?: number) {
+export function scanJobs(request?: ScanRequest) {
   return apiRequest<ScanResult>('/api/jobs/scan', {
     method: 'POST',
-    body: JSON.stringify({ criteriaId: criteriaId ?? null })
+    body: JSON.stringify(request ?? { criteriaId: null })
   })
 }
 
