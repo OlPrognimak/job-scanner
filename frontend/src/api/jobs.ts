@@ -1,6 +1,16 @@
 import { apiRequest } from './client'
 import type { ApplicationDraft, JobOffer } from '../types/job'
 
+export interface PageResult<T> {
+  content: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+  first: boolean
+  last: boolean
+}
+
 export interface ScanResult {
   importedCount: number
   jobs: JobOffer[]
@@ -17,6 +27,10 @@ export interface ScanRequest {
 
 export function listJobs() {
   return apiRequest<JobOffer[]>('/api/jobs')
+}
+
+export function listJobHistory(page = 0, size = 25) {
+  return apiRequest<PageResult<JobOffer>>(`/api/jobs/history?page=${page}&size=${size}`)
 }
 
 export function getJob(id: number) {

@@ -100,6 +100,10 @@ a {
   grid-template-columns: minmax(260px, 360px) auto;
 }
 
+.history-controls {
+  min-width: 160px;
+}
+
 .quick-scan-panel {
   align-items: start;
   border: 1px solid #dfe7ef;
@@ -200,6 +204,19 @@ th {
   padding: 0.42rem 0.5rem;
 }
 
+tbody tr {
+  transition: background-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+tbody tr.selected-row {
+  background: #fff4cc;
+  box-shadow: inset 4px 0 0 #d79000;
+}
+
+tbody tr.selected-row td {
+  border-bottom-color: #efd28b;
+}
+
 .actions {
   align-items: center;
   display: flex;
@@ -208,11 +225,35 @@ th {
   min-width: 260px;
 }
 
+.compact-actions {
+  min-width: 100px;
+}
+
+.job-title-link {
+  color: #1f2933;
+  font-weight: 750;
+}
+
+.job-title-link:hover {
+  color: #0f6b78;
+  text-decoration: underline;
+}
+
 .row-counter {
   color: #65758b;
   font-weight: 800;
   text-align: right;
   width: 3rem;
+}
+
+.date-cell {
+  color: #52616f;
+  white-space: nowrap;
+}
+
+.back-link {
+  display: inline-flex;
+  margin-bottom: 1rem;
 }
 
 .status-badge {
@@ -270,6 +311,21 @@ th {
 
 .warning-list p {
   margin: 0;
+}
+
+.history-summary {
+  align-items: center;
+  color: #52616f;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.pagination {
+  align-items: center;
+  display: flex;
+  gap: 0.6rem;
 }
 
 .details-grid {

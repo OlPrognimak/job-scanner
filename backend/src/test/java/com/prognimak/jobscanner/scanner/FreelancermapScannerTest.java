@@ -6,6 +6,9 @@ import com.prognimak.jobscanner.config.JobScannerProperties;
 import com.prognimak.jobscanner.entity.JobOffer;
 import com.prognimak.jobscanner.entity.JobSearchCriteria;
 import com.prognimak.jobscanner.entity.RemoteType;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -85,6 +88,108 @@ class FreelancermapScannerTest {
     }
 
     @Test
+    void extractsOriginalCreatedDateFromSearchResultCard() {
+        String html = """
+                <html>
+                  <body>
+                    <div class="project-card">
+                      <div class="project-info">
+                        <div>Hays AG</div>
+                        <div>
+                          <a data-testid="title" data-id="project-card-title" href="/projekt/backend-entwickler-java-spring-boot">
+                            Backend-Entwickler Java Spring Boot
+                          </a>
+                        </div>
+                        <div class="project-created"><span data-testid="created" class="created">10.07.2026</span></div>
+                        <div class="project-info-list">
+                          <div data-testid="city">Remote</div>
+                          <div data-testid="remoteInPercent">100% Remote</div>
+                          <div data-testid="type">Freiberuflich</div>
+                        </div>
+                      </div>
+                    </div>
+                  </body>
+                </html>
+                """;
+        JobSearchCriteria criteria = new JobSearchCriteria();
+        criteria.setKeyword("Java");
+
+        var offers = scanner.extractOffersFromSearchPage(html, "https://www.freelancermap.de/projekte?query=java", criteria);
+
+        assertThat(offers).hasSize(1);
+        assertThat(offers.getFirst().getPublishedAt())
+                .isEqualTo(LocalDate.of(2026, 7, 10).atStartOfDay(ZoneId.of("Europe/Berlin")).toInstant());
+    }
+
+    @Test
+    void extractsCurrentDateWithTimeFromSearchResultCard() {
+        String html = """
+                <html>
+                  <body>
+                    <div class="project-card">
+                      <div class="project-info">
+                        <div>Hays AG</div>
+                        <div>
+                          <a data-testid="title" data-id="project-card-title" href="/projekt/backend-entwickler-java-spring-boot">
+                            Backend-Entwickler Java Spring Boot
+                          </a>
+                        </div>
+                        <div class="project-created"><span data-testid="created" class="created">10:44</span></div>
+                        <div class="project-info-list">
+                          <div data-testid="city">Remote</div>
+                          <div data-testid="remoteInPercent">100% Remote</div>
+                          <div data-testid="type">Freiberuflich</div>
+                        </div>
+                      </div>
+                    </div>
+                  </body>
+                </html>
+                """;
+        JobSearchCriteria criteria = new JobSearchCriteria();
+        criteria.setKeyword("Java");
+
+        var offers = scanner.extractOffersFromSearchPage(html, "https://www.freelancermap.de/projekte?query=java", criteria);
+
+        assertThat(offers).hasSize(1);
+        assertThat(offers.getFirst().getPublishedAt())
+                .isEqualTo(LocalDate.now(ZoneId.of("Europe/Berlin"))
+                        .atTime(10, 44)
+                        .atZone(ZoneId.of("Europe/Berlin"))
+                        .toInstant());
+    }
+
+    @Test
+    void extractsOriginalPublishedDateTimeFromDetailHeader() {
+        String html = """
+                <html>
+                  <body>
+                    <main>
+                      <div class="project-show-header">
+                        <p class="color-text-display-weak line-height-base">
+                          veröffentlicht am 09.07.2026, 15:15&nbsp;Uhr
+                        </p>
+                      </div>
+                      <h1 class="h2 mg-b-display-m">Backend Softwareentwicklung Microservices</h1>
+                      <section class="project-description">Java, Spring Boot und React.</section>
+                    </main>
+                  </body>
+                </html>
+                """;
+
+        Optional<JobOffer> offer = scanner.parseDetail(
+                html,
+                "https://www.freelancermap.de/projekt/java-full-stack-developer"
+        );
+
+        assertThat(offer).isPresent();
+        assertThat(offer.get().getTitle()).isEqualTo("Backend Softwareentwicklung Microservices");
+        assertThat(offer.get().getPublishedAt())
+                .isEqualTo(LocalDateTime.of(2026, 7, 9, 15, 15)
+                        .atZone(ZoneId.of("Europe/Berlin"))
+                        .toInstant());
+    }
+
+    @Test
     void keepsSearchResultCardBeforeDetailContentMatching() {
         String html = """
                 <html>
@@ -124,6 +229,7 @@ class FreelancermapScannerTest {
                     </script>
                     <main>
                       <h1 class="h2 mg-b-display-m">Senior Java Spring Boot Entwickler</h1>
+                      <meta itemprop="datePosted" content="2026-07-11T08:30:00Z" />
                       <section class="project-description">
                         Gesucht wird Unterstuetzung mit Java 21, Spring Boot, PostgreSQL und Kafka.
                         Remote Projekt mit 850 EUR / Tag.
@@ -147,6 +253,7 @@ class FreelancermapScannerTest {
         assertThat(offer.get().getJobUrl())
                 .isEqualTo("https://www.freelancermap.de/projekt/java-spring-boot-entwickler");
         assertThat(offer.get().getDescription()).contains("Java 21");
+        assertThat(offer.get().getPublishedAt()).isEqualTo(java.time.Instant.parse("2026-07-11T08:30:00Z"));
     }
 
     @Test

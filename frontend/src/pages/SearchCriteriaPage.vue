@@ -8,8 +8,10 @@ const criteria = ref<SearchCriteria[]>([])
 const loading = ref(false)
 const error = ref('')
 const sourceOptions = [
+  { value: 'arbeitsagentur', label: 'Arbeitsagentur' },
   { value: 'glassdoor', label: 'Glassdoor' },
   { value: 'freelancermap', label: 'freelancermap' },
+  { value: 'meinestadt', label: 'meinestadt.de' },
   { value: 'adzuna', label: 'Adzuna' },
   { value: 'stepstone', label: 'StepStone' },
   { value: 'mock', label: 'Mock' }
@@ -138,7 +140,7 @@ onMounted(load)
       <label>Language <input v-model="form.language" /></label>
       <label>
         Source website
-        <select v-model="selectedSources" multiple size="4">
+        <select v-model="selectedSources" multiple size="6">
           <option v-for="source in sourceOptions" :key="source.value" :value="source.value">
             {{ source.label }}
           </option>

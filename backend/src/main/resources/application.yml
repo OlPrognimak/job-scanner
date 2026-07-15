@@ -21,8 +21,7 @@ spring:
     openai:
       api-key: ${OPENAI_API_KEY:}
       chat:
-        options:
-          model: ${OPENAI_MODEL:gpt-5-mini}
+        model: ${OPENAI_MODEL:gpt-5.5}
 
 server:
   port: ${SERVER_PORT:8088}
@@ -33,7 +32,7 @@ job-scanner:
   cv-file-path: ${CV_FILE_PATH:../documents/cv.docx}
   ai-matching-during-scan: ${AI_MATCHING_DURING_SCAN:false}
   scanners:
-    enabled: ${SCANNERS_ENABLED:mock,freelancermap,adzuna,glassdoor,stepstone}
+    enabled: ${SCANNERS_ENABLED:mock,freelancermap,adzuna,arbeitsagentur,meinestadt,glassdoor,stepstone}
     freelancermap:
       base-url: ${FREELANCERMAP_BASE_URL:https://www.freelancermap.de}
       search-path: ${FREELANCERMAP_SEARCH_PATH:/projekte}
@@ -57,10 +56,32 @@ job-scanner:
       user-agent: ${GLASSDOOR_USER_AGENT:Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36}
     adzuna:
       base-url: ${ADZUNA_BASE_URL:https://api.adzuna.com}
-      country: ${ADZUNA_COUNTRY:nl}
+      country: ${ADZUNA_COUNTRY:de}
       app-id: ${ADZUNA_APP_ID:}
       app-key: ${ADZUNA_APP_KEY:}
       enabled: ${ADZUNA_ENABLED:true}
       max-pages: ${ADZUNA_MAX_PAGES:1}
       results-per-page: ${ADZUNA_RESULTS_PER_PAGE:25}
       request-timeout-seconds: ${ADZUNA_REQUEST_TIMEOUT_SECONDS:30}
+    arbeitsagentur:
+      base-url: ${ARBEITSAGENTUR_BASE_URL:https://rest.arbeitsagentur.de}
+      website-base-url: ${ARBEITSAGENTUR_WEBSITE_BASE_URL:https://www.arbeitsagentur.de}
+      api-key: ${ARBEITSAGENTUR_API_KEY:jobboerse-jobsuche}
+      enabled: ${ARBEITSAGENTUR_ENABLED:true}
+      max-pages: ${ARBEITSAGENTUR_MAX_PAGES:1}
+      results-per-page: ${ARBEITSAGENTUR_RESULTS_PER_PAGE:25}
+      max-details: ${ARBEITSAGENTUR_MAX_DETAILS:25}
+      max-parallel-detail-requests: ${ARBEITSAGENTUR_MAX_PARALLEL_DETAIL_REQUESTS:6}
+      request-timeout-seconds: ${ARBEITSAGENTUR_REQUEST_TIMEOUT_SECONDS:20}
+      published-within-days: ${ARBEITSAGENTUR_PUBLISHED_WITHIN_DAYS:100}
+    meinestadt:
+      base-url: ${MEINESTADT_BASE_URL:https://jobs.meinestadt.de}
+      search-path: ${MEINESTADT_SEARCH_PATH:/deutschland}
+      enabled: ${MEINESTADT_ENABLED:true}
+      max-pages: ${MEINESTADT_MAX_PAGES:1}
+      max-details: ${MEINESTADT_MAX_DETAILS:20}
+      max-candidates: ${MEINESTADT_MAX_CANDIDATES:30}
+      max-parallel-detail-requests: ${MEINESTADT_MAX_PARALLEL_DETAIL_REQUESTS:4}
+      request-delay-ms: ${MEINESTADT_REQUEST_DELAY_MS:500}
+      request-timeout-seconds: ${MEINESTADT_REQUEST_TIMEOUT_SECONDS:20}
+      user-agent: ${MEINESTADT_USER_AGENT:Mozilla/5.0 JobScannerBot/1.0}

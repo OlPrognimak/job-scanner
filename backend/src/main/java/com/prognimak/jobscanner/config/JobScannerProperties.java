@@ -56,6 +56,8 @@ public class JobScannerProperties {
         private Freelancermap freelancermap = new Freelancermap();
         private Glassdoor glassdoor = new Glassdoor();
         private Adzuna adzuna = new Adzuna();
+        private Arbeitsagentur arbeitsagentur = new Arbeitsagentur();
+        private Meinestadt meinestadt = new Meinestadt();
 
         public Freelancermap getFreelancermap() {
             return freelancermap;
@@ -79,6 +81,22 @@ public class JobScannerProperties {
 
         public void setAdzuna(Adzuna adzuna) {
             this.adzuna = adzuna;
+        }
+
+        public Arbeitsagentur getArbeitsagentur() {
+            return arbeitsagentur;
+        }
+
+        public void setArbeitsagentur(Arbeitsagentur arbeitsagentur) {
+            this.arbeitsagentur = arbeitsagentur;
+        }
+
+        public Meinestadt getMeinestadt() {
+            return meinestadt;
+        }
+
+        public void setMeinestadt(Meinestadt meinestadt) {
+            this.meinestadt = meinestadt;
         }
     }
 
@@ -335,6 +353,194 @@ public class JobScannerProperties {
 
         public void setRequestTimeoutSeconds(int requestTimeoutSeconds) {
             this.requestTimeoutSeconds = requestTimeoutSeconds;
+        }
+    }
+
+    public static class Arbeitsagentur {
+
+        private String baseUrl = "https://rest.arbeitsagentur.de";
+        private String websiteBaseUrl = "https://www.arbeitsagentur.de";
+        private String apiKey = "jobboerse-jobsuche";
+        private boolean enabled = true;
+        private int maxPages = 1;
+        private int resultsPerPage = 25;
+        private int maxDetails = 25;
+        private int maxParallelDetailRequests = 6;
+        private int requestTimeoutSeconds = 20;
+        private int publishedWithinDays = 100;
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public String getWebsiteBaseUrl() {
+            return websiteBaseUrl;
+        }
+
+        public void setWebsiteBaseUrl(String websiteBaseUrl) {
+            this.websiteBaseUrl = websiteBaseUrl;
+        }
+
+        public String getApiKey() {
+            return apiKey;
+        }
+
+        public void setApiKey(String apiKey) {
+            this.apiKey = apiKey;
+        }
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public int getMaxPages() {
+            return maxPages;
+        }
+
+        public void setMaxPages(int maxPages) {
+            this.maxPages = maxPages;
+        }
+
+        public int getResultsPerPage() {
+            return resultsPerPage;
+        }
+
+        public void setResultsPerPage(int resultsPerPage) {
+            this.resultsPerPage = resultsPerPage;
+        }
+
+        public int getMaxDetails() {
+            return maxDetails;
+        }
+
+        public void setMaxDetails(int maxDetails) {
+            this.maxDetails = maxDetails;
+        }
+
+        public int getMaxParallelDetailRequests() {
+            return maxParallelDetailRequests;
+        }
+
+        public void setMaxParallelDetailRequests(int maxParallelDetailRequests) {
+            this.maxParallelDetailRequests = maxParallelDetailRequests;
+        }
+
+        public int getRequestTimeoutSeconds() {
+            return requestTimeoutSeconds;
+        }
+
+        public void setRequestTimeoutSeconds(int requestTimeoutSeconds) {
+            this.requestTimeoutSeconds = requestTimeoutSeconds;
+        }
+
+        public int getPublishedWithinDays() {
+            return publishedWithinDays;
+        }
+
+        public void setPublishedWithinDays(int publishedWithinDays) {
+            this.publishedWithinDays = publishedWithinDays;
+        }
+    }
+
+    public static class Meinestadt {
+
+        private String baseUrl = "https://jobs.meinestadt.de";
+        private String searchPath = "/deutschland";
+        private boolean enabled = true;
+        private int maxPages = 1;
+        private int maxDetails = 20;
+        private int maxCandidates = 30;
+        private int maxParallelDetailRequests = 4;
+        private long requestDelayMs = 500;
+        private int requestTimeoutSeconds = 20;
+        private String userAgent = "Mozilla/5.0 JobScannerBot/1.0";
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public String getSearchPath() {
+            return searchPath;
+        }
+
+        public void setSearchPath(String searchPath) {
+            this.searchPath = searchPath;
+        }
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public int getMaxPages() {
+            return maxPages;
+        }
+
+        public void setMaxPages(int maxPages) {
+            this.maxPages = maxPages;
+        }
+
+        public int getMaxDetails() {
+            return maxDetails;
+        }
+
+        public void setMaxDetails(int maxDetails) {
+            this.maxDetails = maxDetails;
+        }
+
+        public int getMaxCandidates() {
+            return maxCandidates;
+        }
+
+        public void setMaxCandidates(int maxCandidates) {
+            this.maxCandidates = maxCandidates;
+        }
+
+        public int getMaxParallelDetailRequests() {
+            return maxParallelDetailRequests;
+        }
+
+        public void setMaxParallelDetailRequests(int maxParallelDetailRequests) {
+            this.maxParallelDetailRequests = maxParallelDetailRequests;
+        }
+
+        public long getRequestDelayMs() {
+            return requestDelayMs;
+        }
+
+        public void setRequestDelayMs(long requestDelayMs) {
+            this.requestDelayMs = requestDelayMs;
+        }
+
+        public int getRequestTimeoutSeconds() {
+            return requestTimeoutSeconds;
+        }
+
+        public void setRequestTimeoutSeconds(int requestTimeoutSeconds) {
+            this.requestTimeoutSeconds = requestTimeoutSeconds;
+        }
+
+        public String getUserAgent() {
+            return userAgent;
+        }
+
+        public void setUserAgent(String userAgent) {
+            this.userAgent = userAgent;
         }
     }
 }

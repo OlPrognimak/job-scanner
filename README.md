@@ -31,9 +31,11 @@ Optional AI configuration:
 
 ```bash
 export OPENAI_API_KEY=...
-export OPENAI_MODEL=gpt-5-mini
+export OPENAI_MODEL=gpt-5.5
 docker compose up --build
 ```
+
+Use a model that is enabled for your OpenAI project. If you see `model_not_found` or `does not have access to model`, change `OPENAI_MODEL` to a model returned by the OpenAI models API for your project. Do not set `OPENAI_TEMPERATURE` or `SPRING_AI_OPENAI_CHAT_OPTIONS_TEMPERATURE`; the app intentionally leaves temperature unset because some models only accept the provider default.
 
 Without a working OpenAI key, the backend falls back to a deterministic draft and match explanation so the app remains testable.
 
@@ -123,6 +125,8 @@ frontend/src
 - `MockJobSourceScanner`: returns mock jobs for first tests.
 - `FreelancermapScanner`: fetches freelancermap search pages, extracts project detail links, parses detail pages with JSoup, and returns normalized job offers.
 - `AdzunaScanner`: calls the official Adzuna REST API and maps JSON job ads into normalized job offers.
+- `ArbeitsagenturScanner`: calls the Bundesagentur fuer Arbeit Jobsuche JSON endpoints, fetches detail records by reference number, and maps public job ads into normalized job offers.
+- `MeinestadtScanner`: fetches meinestadt.de job result pages, parses rendered result cards, fetches detail pages, and imports only locally matching jobs.
 - `GlassdoorScanner`: fetches Glassdoor search result pages, extracts job detail links, parses detail pages with JSoup, and returns normalized job offers when Glassdoor provides server-rendered HTML.
 - `StepStoneScanner`: source adapter skeleton.
 
@@ -140,10 +144,42 @@ To scan Glassdoor manually, create or update a search criterion with:
 sourceWebsite = glassdoor
 ```
 
+To scan Arbeitsagentur manually, create or update a search criterion with:
+
+```text
+sourceWebsite = arbeitsagentur
+```
+
+The Arbeitsagentur scanner does not need personal API credentials. It uses the public client id header documented by `bundesAPI`:
+
+```bash
+ARBEITSAGENTUR_API_KEY=jobboerse-jobsuche
+ARBEITSAGENTUR_MAX_PAGES=1
+ARBEITSAGENTUR_RESULTS_PER_PAGE=25
+ARBEITSAGENTUR_MAX_DETAILS=25
+ARBEITSAGENTUR_PUBLISHED_WITHIN_DAYS=100
+```
+
+To scan meinestadt.de manually, create or update a search criterion with:
+
+```text
+sourceWebsite = meinestadt
+```
+
+The meinestadt.de scanner is HTML-based and intentionally conservative. It does not use browser automation or bypass login/CAPTCHA/security layers. It parses public result/detail HTML and applies local keyword filtering before importing:
+
+```bash
+MEINESTADT_MAX_PAGES=1
+MEINESTADT_MAX_DETAILS=20
+MEINESTADT_MAX_CANDIDATES=30
+MEINESTADT_MAX_PARALLEL_DETAIL_REQUESTS=4
+MEINESTADT_REQUEST_DELAY_MS=500
+```
+
 One search criterion can scan multiple sources. The frontend stores the selected sources as a comma-separated value:
 
 ```text
-sourceWebsite = glassdoor,freelancermap
+sourceWebsite = arbeitsagentur,adzuna,freelancermap,meinestadt
 ```
 
 To scan Adzuna, register for API credentials at https://developer.adzuna.com/ and set:

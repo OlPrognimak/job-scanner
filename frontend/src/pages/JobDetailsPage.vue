@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import { generateAnschreiben, getDraft, getJob, sendDraft, updateDraft } from '../api/jobs'
 import LoadingError from '../components/LoadingError.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import type { ApplicationDraft, JobOffer } from '../types/job'
 
 const props = defineProps<{ id: string }>()
+const route = useRoute()
 
 const job = ref<JobOffer | null>(null)
 const draft = ref<ApplicationDraft | null>(null)
@@ -14,6 +16,8 @@ const error = ref('')
 const saving = ref(false)
 const sending = ref(false)
 const generating = ref(false)
+const backTarget = computed(() => route.query.back === 'history' ? '/jobs/history' : '/jobs')
+const backLabel = computed(() => route.query.back === 'history' ? 'Zurueck zu Job History' : 'Zurueck zu Jobs')
 
 const formattedDescription = computed(() => formatDescription(job.value?.description ?? ''))
 const jobFacts = computed(() => {
@@ -24,6 +28,7 @@ const jobFacts = computed(() => {
     { label: 'Remote', value: job.value.remoteType },
     { label: 'Vertrag', value: job.value.contractType },
     { label: 'Quelle', value: job.value.source },
+    { label: 'Veröffentlicht am', value: formatDateTime(job.value.publishedAt) },
     { label: 'Verguetung', value: job.value.rateOrSalary ? String(job.value.rateOrSalary) : undefined }
   ].filter((item) => item.value)
 })
@@ -100,10 +105,20 @@ function formatDescription(description: string) {
     }))
 }
 
+function formatDateTime(value?: string) {
+  if (!value) return undefined
+  return new Intl.DateTimeFormat('de-DE', {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  }).format(new Date(value))
+}
+
 onMounted(load)
 </script>
 
 <template>
+  <RouterLink class="back-link" :to="backTarget">&larr; {{ backLabel }}</RouterLink>
+
   <LoadingError :loading="loading" :error="error" />
 
   <article v-if="job" class="details-grid">

@@ -17,6 +17,7 @@ public record JobOfferDto(
         String description,
         String jobUrl,
         Instant detectedAt,
+        Instant publishedAt,
         JobStatus status,
         Integer matchScore,
         String matchExplanation,

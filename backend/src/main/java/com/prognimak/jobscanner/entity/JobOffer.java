@@ -22,11 +22,13 @@ public class JobOffer {
     @Column(nullable = false)
     private String source;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "text")
     private String title;
 
+    @Column(columnDefinition = "text")
     private String company;
 
+    @Column(columnDefinition = "text")
     private String location;
 
     @Enumerated(EnumType.STRING)
@@ -38,11 +40,13 @@ public class JobOffer {
     @Column(nullable = false, columnDefinition = "text")
     private String description;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, columnDefinition = "text")
     private String jobUrl;
 
     @Column(nullable = false)
     private Instant detectedAt = Instant.now();
+
+    private Instant publishedAt;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -133,6 +137,14 @@ public class JobOffer {
 
     public void setDetectedAt(Instant detectedAt) {
         this.detectedAt = detectedAt;
+    }
+
+    public Instant getPublishedAt() {
+        return publishedAt;
+    }
+
+    public void setPublishedAt(Instant publishedAt) {
+        this.publishedAt = publishedAt;
     }
 
     public JobStatus getStatus() {

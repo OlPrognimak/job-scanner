@@ -9,6 +9,10 @@ import java.math.BigDecimal;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -35,6 +39,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class GlassdoorScanner implements JobSourceScanner {
 
     private static final Logger log = LoggerFactory.getLogger(GlassdoorScanner.class);
+    private static final ZoneId PORTAL_ZONE = ZoneId.of("Europe/Berlin");
 
     private final RestClient restClient;
     private final JobScannerProperties.Glassdoor properties;
@@ -308,6 +313,7 @@ public class GlassdoorScanner implements JobSourceScanner {
             offer.setDescription(extractCardDescription(card, title));
             offer.setJobUrl(jobUrl);
             offer.setDetectedAt(Instant.now());
+            offer.setPublishedAt(extractPublishedAt(card, html).orElse(null));
             offer.setRateOrSalary(extractRate(card.text()));
             if (matchesLocalCriteria(offer, criteria)) {
                 offers.add(offer);
@@ -351,6 +357,7 @@ public class GlassdoorScanner implements JobSourceScanner {
         offer.setDescription(extractDescription(document));
         offer.setJobUrl(normalizeUrl(detailUrl));
         offer.setDetectedAt(Instant.now());
+        offer.setPublishedAt(extractPublishedAt(document, html).orElse(null));
         offer.setRateOrSalary(extractRate(document.text()));
 
         if (!matchesLocalCriteria(offer, criteria)) {
@@ -505,6 +512,77 @@ public class GlassdoorScanner implements JobSourceScanner {
         }
         if (offer.getRateOrSalary() == null) {
             offer.setRateOrSalary(cardOffer.getRateOrSalary());
+        }
+        if (offer.getPublishedAt() == null) {
+            offer.setPublishedAt(cardOffer.getPublishedAt());
+        }
+    }
+
+    private Optional<Instant> extractPublishedAt(Element root, String html) {
+        for (String selector : List.of(
+                "time[datetime]",
+                "[datetime]",
+                "meta[itemprop=datePosted]",
+                "meta[property=article:published_time]",
+                "meta[name=date]")) {
+            Element element = root.selectFirst(selector);
+            if (element == null) {
+                continue;
+            }
+            String value = element.hasAttr("datetime") ? element.attr("datetime")
+                    : element.hasAttr("content") ? element.attr("content")
+                    : element.text();
+            Optional<Instant> parsed = parsePortalDate(value);
+            if (parsed.isPresent()) {
+                return parsed;
+            }
+        }
+
+        java.util.regex.Matcher jsonMatcher = java.util.regex.Pattern
+                .compile("\"(?:datePosted|datePublished|postedAt|createdAt)\"\\s*:\\s*\"([^\"]+)\"",
+                        java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(html == null ? "" : html);
+        if (jsonMatcher.find()) {
+            Optional<Instant> parsed = parsePortalDate(jsonMatcher.group(1));
+            if (parsed.isPresent()) {
+                return parsed;
+            }
+        }
+
+        String text = root.text().replace('\u00a0', ' ').replaceAll("\\s+", " ").toLowerCase(Locale.GERMAN);
+        if (text.contains("heute") || text.contains("today")) {
+            return Optional.of(LocalDate.now(PORTAL_ZONE).atStartOfDay(PORTAL_ZONE).toInstant());
+        }
+        if (text.contains("gestern") || text.contains("yesterday")) {
+            return Optional.of(LocalDate.now(PORTAL_ZONE).minusDays(1).atStartOfDay(PORTAL_ZONE).toInstant());
+        }
+        java.util.regex.Matcher daysMatcher = java.util.regex.Pattern
+                .compile("(?:vor\\s*)?(\\d+)\\s*(?:tag|tage|tagen|day|days)")
+                .matcher(text);
+        if (daysMatcher.find()) {
+            return Optional.of(LocalDate.now(PORTAL_ZONE)
+                    .minusDays(Long.parseLong(daysMatcher.group(1)))
+                    .atStartOfDay(PORTAL_ZONE)
+                    .toInstant());
+        }
+        return Optional.empty();
+    }
+
+    private Optional<Instant> parsePortalDate(String value) {
+        if (value == null || value.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(Instant.parse(value.trim()));
+        } catch (DateTimeParseException ignored) {
+            // Try date-only values below.
+        }
+        try {
+            return Optional.of(LocalDate.parse(value.trim(), DateTimeFormatter.ISO_LOCAL_DATE)
+                    .atStartOfDay(PORTAL_ZONE)
+                    .toInstant());
+        } catch (DateTimeParseException ignored) {
+            return Optional.empty();
         }
     }
 

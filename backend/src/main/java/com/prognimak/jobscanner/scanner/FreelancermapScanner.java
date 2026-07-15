@@ -10,6 +10,12 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -41,6 +47,20 @@ public class FreelancermapScanner implements JobSourceScanner {
             "freelance projekte finden",
             "projektboerse",
             "projektbörse"
+    );
+    private static final ZoneId PORTAL_ZONE = ZoneId.of("Europe/Berlin");
+    private static final List<DateTimeFormatter> DATE_TIME_FORMATTERS = List.of(
+            DateTimeFormatter.ofPattern("d.M.uuuu, H:mm 'Uhr'"),
+            DateTimeFormatter.ofPattern("dd.MM.uuuu, HH:mm 'Uhr'")
+    );
+    private static final List<DateTimeFormatter> DATE_FORMATTERS = List.of(
+            DateTimeFormatter.ISO_LOCAL_DATE,
+            DateTimeFormatter.ofPattern("d.M.uuuu"),
+            DateTimeFormatter.ofPattern("dd.MM.uuuu"),
+            DateTimeFormatter.ofPattern("d. M. uuuu"),
+            DateTimeFormatter.ofPattern("dd. MM. uuuu"),
+            DateTimeFormatter.ofPattern("d. MMMM uuuu", Locale.GERMAN),
+            DateTimeFormatter.ofPattern("dd. MMMM uuuu", Locale.GERMAN)
     );
 
     private final RestClient restClient;
@@ -140,6 +160,7 @@ public class FreelancermapScanner implements JobSourceScanner {
             String html = fetch(cardOffer.getJobUrl());
             Optional<JobOffer> parsedOffer = parseDetail(html, cardOffer.getJobUrl(), criteria);
             if (parsedOffer.isEmpty()) {
+                extractRawPublishedAt(html).ifPresent(cardOffer::setPublishedAt);
                 return Optional.empty();
             }
             JobOffer offer = parsedOffer.get();
@@ -232,6 +253,7 @@ public class FreelancermapScanner implements JobSourceScanner {
             offer.setDescription(extractCardDescription(card));
             offer.setJobUrl(jobUrl);
             offer.setDetectedAt(Instant.now());
+            offer.setPublishedAt(extractCardPublishedAt(card).orElse(null));
             offer.setRateOrSalary(extractRate(card.text()));
             if (matchesLocalCriteria(offer, criteria)) {
                 offers.add(offer);
@@ -278,6 +300,7 @@ public class FreelancermapScanner implements JobSourceScanner {
         offer.setDescription(extractDescription(document));
         offer.setJobUrl(normalizeUrl(detailUrl));
         offer.setDetectedAt(Instant.now());
+        offer.setPublishedAt(extractOriginalPublishedAt(document, html).orElse(null));
         offer.setRateOrSalary(extractRate(document.text()));
         if (!matchesLocalCriteria(offer, criteria)) {
             return Optional.empty();
@@ -303,6 +326,9 @@ public class FreelancermapScanner implements JobSourceScanner {
         }
         if (offer.getRateOrSalary() == null) {
             offer.setRateOrSalary(cardOffer.getRateOrSalary());
+        }
+        if (cardOffer.getPublishedAt() != null) {
+            offer.setPublishedAt(cardOffer.getPublishedAt());
         }
     }
 
@@ -501,6 +527,201 @@ public class FreelancermapScanner implements JobSourceScanner {
             return new BigDecimal(matcher.group(1));
         }
         return null;
+    }
+
+    private Optional<Instant> extractOriginalPublishedAt(Element root, String html) {
+        Optional<Instant> rawDate = extractRawPublishedAt(html);
+        if (rawDate.isPresent()) {
+            return rawDate;
+        }
+        Optional<Instant> headerDate = extractTextPublishedAt(firstText(root, ".project-show-header"));
+        if (headerDate.isPresent()) {
+            return headerDate;
+        }
+        Optional<Instant> structuredDate = extractStructuredPublishedAt(root);
+        if (structuredDate.isPresent()) {
+            return structuredDate;
+        }
+        Optional<Instant> jsonDate = extractJsonPublishedAt(html);
+        if (jsonDate.isPresent()) {
+            return jsonDate;
+        }
+        return extractTextPublishedAt(root.text());
+    }
+
+    private Optional<Instant> extractCardPublishedAt(Element card) {
+        String created = firstText(card,
+                ".project-created span.created",
+                ".project-created [data-testid=created]",
+                "[data-testid=created]",
+                "span.created");
+        if (created.isBlank()) {
+            return Optional.empty();
+        }
+        return parseCardCreated(created);
+    }
+
+    private Optional<Instant> parseCardCreated(String value) {
+        String normalized = value.replace('\u00a0', ' ').trim();
+        if (normalized.matches("\\d{1,2}\\.\\d{1,2}\\.\\d{4}")) {
+            for (DateTimeFormatter formatter : DATE_FORMATTERS) {
+                try {
+                    return Optional.of(LocalDate.parse(normalized, formatter)
+                            .atStartOfDay(PORTAL_ZONE)
+                            .toInstant());
+                } catch (DateTimeParseException ignored) {
+                    // Try next supported date-only format.
+                }
+            }
+        }
+        if (normalized.matches("\\d{1,2}:\\d{2}")) {
+            try {
+                return Optional.of(LocalDate.now(PORTAL_ZONE)
+                        .atTime(LocalTime.parse(normalized, DateTimeFormatter.ofPattern("H:mm")))
+                        .atZone(PORTAL_ZONE)
+                        .toInstant());
+            } catch (DateTimeParseException ignored) {
+                return Optional.empty();
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Optional<Instant> extractRawPublishedAt(String html) {
+        if (html == null || html.isBlank()) {
+            return Optional.empty();
+        }
+
+        java.util.regex.Matcher headerMatcher = java.util.regex.Pattern
+                .compile("(?is)<div[^>]*class=\"[^\"]*project-show-header[^\"]*\"[^>]*>(.*?)</div>")
+                .matcher(html);
+        while (headerMatcher.find()) {
+            Optional<Instant> parsed = extractTextPublishedAt(Jsoup.parse(headerMatcher.group(1)).text());
+            if (parsed.isPresent()) {
+                return parsed;
+            }
+        }
+
+        String text = Jsoup.parse(html).text();
+        return extractTextPublishedAt(text);
+    }
+
+    private Optional<Instant> extractStructuredPublishedAt(Element root) {
+        for (String selector : List.of(
+                "time[datetime]",
+                "[datetime]",
+                "meta[itemprop=datePosted]",
+                "meta[itemprop=datePublished]",
+                "meta[property=article:published_time]",
+                "meta[name=date]",
+                "meta[name=pubdate]")) {
+            Element element = root.selectFirst(selector);
+            if (element == null) {
+                continue;
+            }
+            String value = element.hasAttr("datetime") ? element.attr("datetime")
+                    : element.hasAttr("content") ? element.attr("content")
+                    : element.text();
+            Optional<Instant> parsed = parsePortalDate(value);
+            if (parsed.isPresent()) {
+                return parsed;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Optional<Instant> extractJsonPublishedAt(String html) {
+        if (html == null || html.isBlank()) {
+            return Optional.empty();
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("\"(?:datePosted|datePublished|publishedAt|publicationDate|createdAt|created_at)\"\\s*:\\s*\"((?:\\\\.|[^\"])*)\"",
+                        java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(html);
+        while (matcher.find()) {
+            Optional<Instant> parsed = parsePortalDate(decodeJsonText(matcher.group(1)));
+            if (parsed.isPresent()) {
+                return parsed;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Optional<Instant> extractTextPublishedAt(String text) {
+        if (text == null || text.isBlank()) {
+            return Optional.empty();
+        }
+        String normalized = text.replace('\u00a0', ' ').replaceAll("\\s+", " ");
+        java.util.regex.Matcher dateTimeMatcher = java.util.regex.Pattern
+                .compile("(?i)(?:veröffentlicht|veroeffentlicht|eingestellt|online seit|erstellt|aktualisiert)\\s*(?:am)?\\s*:?\\s*(\\d{1,2}\\.\\s*\\d{1,2}\\.\\s*\\d{4}\\s*,\\s*\\d{1,2}:\\d{2}\\s*uhr)")
+                .matcher(normalized);
+        if (dateTimeMatcher.find()) {
+            Optional<Instant> parsed = parsePortalDate(dateTimeMatcher.group(1));
+            if (parsed.isPresent()) {
+                return parsed;
+            }
+        }
+
+        java.util.regex.Matcher relativeMatcher = java.util.regex.Pattern
+                .compile("(?i)(?:veröffentlicht|veroeffentlicht|eingestellt|online seit|erstellt|aktualisiert)\\s*(?:am|vor)?\\s*(heute|gestern|\\d+\\s+tag(?:e|en)?)")
+                .matcher(normalized);
+        if (relativeMatcher.find()) {
+            Optional<Instant> parsed = parseRelativePortalDate(relativeMatcher.group(1));
+            if (parsed.isPresent()) {
+                return parsed;
+            }
+        }
+
+        java.util.regex.Matcher dateMatcher = java.util.regex.Pattern
+                .compile("(?i)(?:veröffentlicht|veroeffentlicht|eingestellt|online seit|erstellt|aktualisiert)\\s*(?:am)?\\s*:?\\s*(\\d{1,2}\\.\\s*(?:\\d{1,2}\\.|[A-Za-zÄÖÜäöüß]+)\\s*\\d{4})")
+                .matcher(normalized);
+        if (dateMatcher.find()) {
+            return parsePortalDate(dateMatcher.group(1));
+        }
+        return Optional.empty();
+    }
+
+    private Optional<Instant> parseRelativePortalDate(String value) {
+        String normalized = value.toLowerCase(Locale.GERMAN).trim();
+        LocalDate today = LocalDate.now(PORTAL_ZONE);
+        if (normalized.equals("heute")) {
+            return Optional.of(today.atStartOfDay(PORTAL_ZONE).toInstant());
+        }
+        if (normalized.equals("gestern")) {
+            return Optional.of(today.minusDays(1).atStartOfDay(PORTAL_ZONE).toInstant());
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d+)").matcher(normalized);
+        if (matcher.find()) {
+            return Optional.of(today.minusDays(Long.parseLong(matcher.group(1))).atStartOfDay(PORTAL_ZONE).toInstant());
+        }
+        return Optional.empty();
+    }
+
+    private Optional<Instant> parsePortalDate(String value) {
+        if (value == null || value.isBlank()) {
+            return Optional.empty();
+        }
+        String normalized = value.replace('\u00a0', ' ').replaceAll("\\s+", " ").trim();
+        try {
+            return Optional.of(Instant.parse(normalized));
+        } catch (DateTimeParseException ignored) {
+            // Try common German date-only formats below.
+        }
+        for (DateTimeFormatter formatter : DATE_TIME_FORMATTERS) {
+            try {
+                return Optional.of(LocalDateTime.parse(normalized, formatter).atZone(PORTAL_ZONE).toInstant());
+            } catch (DateTimeParseException ignored) {
+                // Continue with the next known portal date-time format.
+            }
+        }
+        for (DateTimeFormatter formatter : DATE_FORMATTERS) {
+            try {
+                return Optional.of(LocalDate.parse(normalized, formatter).atStartOfDay(PORTAL_ZONE).toInstant());
+            } catch (DateTimeParseException ignored) {
+                // Continue with the next known portal date format.
+            }
+        }
+        return Optional.empty();
     }
 
     private String cleanTitle(String title) {

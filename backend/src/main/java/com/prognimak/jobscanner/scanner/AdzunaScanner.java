@@ -1,6 +1,7 @@
 package com.prognimak.jobscanner.scanner;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.prognimak.jobscanner.config.JobScannerProperties;
 import com.prognimak.jobscanner.entity.ContractType;
 import com.prognimak.jobscanner.entity.JobOffer;
@@ -28,6 +29,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class AdzunaScanner implements JobSourceScanner {
 
     private static final Logger log = LoggerFactory.getLogger(AdzunaScanner.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final RestClient restClient;
     private final JobScannerProperties.Adzuna properties;
@@ -70,19 +72,32 @@ public class AdzunaScanner implements JobSourceScanner {
             if (response == null) {
                 break;
             }
+            int rawCount = response.path("count").asInt(-1);
             JsonNode results = response.path("results");
             if (!results.isArray() || results.isEmpty()) {
+                log.info("Adzuna scan page {} returned no results: rawCount={}, uri={}",
+                        page, rawCount, sanitizeUri(buildSearchUri(criteria, page)));
                 break;
             }
+            int pageImported = 0;
+            int skippedInvalid = 0;
+            int skippedByLocalCriteria = 0;
             for (JsonNode result : results) {
                 JobOffer offer = mapOffer(result);
                 if (offer.getTitle().isBlank() || offer.getJobUrl().isBlank()) {
+                    skippedInvalid++;
                     continue;
                 }
                 if (matchesLocalCriteria(offer, criteria)) {
                     offers.add(offer);
+                    pageImported++;
+                } else {
+                    skippedByLocalCriteria++;
                 }
             }
+            log.info("Adzuna scan page {} result summary: rawCount={}, apiResults={}, imported={}, skippedInvalid={}, skippedByLocalCriteria={}, uri={}",
+                    page, rawCount, results.size(), pageImported, skippedInvalid, skippedByLocalCriteria,
+                    sanitizeUri(buildSearchUri(criteria, page)));
         }
         long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000;
         log.info("Adzuna scan finished: imported={}, elapsedMs={}", offers.size(), elapsedMs);
@@ -90,6 +105,34 @@ public class AdzunaScanner implements JobSourceScanner {
     }
 
     private JsonNode fetch(JobSearchCriteria criteria, int page) {
+        URI uri = buildSearchUri(criteria, page);
+        try {
+            String body = restClient.get()
+                    .uri(uri)
+                    .retrieve()
+                    .body(String.class);
+            if (body == null || body.isBlank()) {
+                return null;
+            }
+            return OBJECT_MAPPER.readTree(body);
+        } catch (HttpClientErrorException.Unauthorized | HttpClientErrorException.Forbidden ex) {
+            throw new ScannerBlockedException(source(),
+                    "Adzuna API request was rejected. Check ADZUNA_APP_ID and ADZUNA_APP_KEY.",
+                    ex);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            throw new ScannerBlockedException(source(),
+                    "Adzuna API returned invalid JSON for request " + sanitizeUri(uri) + ".",
+                    ex);
+        } catch (RestClientException ex) {
+            throw new ScannerBlockedException(source(),
+                    "Adzuna API request failed or timed out after "
+                            + properties.getRequestTimeoutSeconds()
+                            + " seconds. Check credentials, network and ADZUNA_COUNTRY.",
+                    ex);
+        }
+    }
+
+    URI buildSearchUri(JobSearchCriteria criteria, int page) {
         UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(properties.getBaseUrl())
                 .path("/v1/api/jobs/")
                 .path(country(criteria))
@@ -100,11 +143,9 @@ public class AdzunaScanner implements JobSourceScanner {
                 .queryParam("results_per_page", Math.max(1, properties.getResultsPerPage()))
                 .queryParam("content-type", "application/json");
 
-        if (criteria.getKeyword() != null && !criteria.getKeyword().isBlank()) {
-            builder.queryParam("what", criteria.getKeyword());
-        }
+        addKeywordQuery(builder, criteria.getKeyword());
         if (criteria.getLocation() != null && !criteria.getLocation().isBlank()
-                && !isCountryOnlyLocation(criteria.getLocation())) {
+                && !isBroadLocationFilter(criteria.getLocation())) {
             builder.queryParam("where", criteria.getLocation());
         }
         if (criteria.getMinRate() != null) {
@@ -114,22 +155,33 @@ public class AdzunaScanner implements JobSourceScanner {
             builder.queryParam("permanent", 1);
         }
 
-        try {
-            return restClient.get()
-                    .uri(URI.create(builder.build().encode().toUriString()))
-                    .retrieve()
-                    .body(JsonNode.class);
-        } catch (HttpClientErrorException.Unauthorized | HttpClientErrorException.Forbidden ex) {
-            throw new ScannerBlockedException(source(),
-                    "Adzuna API request was rejected. Check ADZUNA_APP_ID and ADZUNA_APP_KEY.",
-                    ex);
-        } catch (RestClientException ex) {
-            throw new ScannerBlockedException(source(),
-                    "Adzuna API request failed or timed out after "
-                            + properties.getRequestTimeoutSeconds()
-                            + " seconds. Check credentials, network and ADZUNA_COUNTRY.",
-                    ex);
+        return URI.create(builder.build().encode().toUriString());
+    }
+
+    private void addKeywordQuery(UriComponentsBuilder builder, String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return;
         }
+        List<String> tokens = keywordTokens(keyword);
+        if (tokens.size() > 1 && keyword.matches(".*[,;].*")) {
+            builder.queryParam("what_or", String.join(" ", tokens));
+            return;
+        }
+        builder.queryParam("what", keyword.trim());
+    }
+
+    private List<String> keywordTokens(String keyword) {
+        return java.util.Arrays.stream(keyword.split("[,;]"))
+                .map(String::trim)
+                .filter(token -> !token.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private String sanitizeUri(URI uri) {
+        return uri.toString()
+                .replaceAll("app_key=[^&]+", "app_key=<hidden>")
+                .replaceAll("app_id=[^&]+", "app_id=<hidden>");
     }
 
     JobOffer mapOffer(JsonNode result) {
@@ -142,7 +194,8 @@ public class AdzunaScanner implements JobSourceScanner {
         offer.setContractType(detectContractType(result));
         offer.setDescription(cleanDescription(result.path("description").asText("")));
         offer.setJobUrl(result.path("redirect_url").asText(""));
-        offer.setDetectedAt(parseInstant(result.path("created").asText("")));
+        offer.setDetectedAt(Instant.now());
+        offer.setPublishedAt(parseInstant(result.path("created").asText("")).orElse(null));
         offer.setRateOrSalary(extractSalary(result));
         return offer;
     }
@@ -155,7 +208,7 @@ public class AdzunaScanner implements JobSourceScanner {
         if (contractType.contains("contract") || contractType.contains("freelance")) {
             return ContractType.FREELANCE;
         }
-        return ContractType.PERMANENT;
+        return null;
     }
 
     private RemoteType detectRemoteType(String description) {
@@ -182,14 +235,14 @@ public class AdzunaScanner implements JobSourceScanner {
         return null;
     }
 
-    private Instant parseInstant(String value) {
+    private java.util.Optional<Instant> parseInstant(String value) {
         if (value == null || value.isBlank()) {
-            return Instant.now();
+            return java.util.Optional.empty();
         }
         try {
-            return Instant.parse(value);
+            return java.util.Optional.of(Instant.parse(value));
         } catch (DateTimeParseException ex) {
-            return Instant.now();
+            return java.util.Optional.empty();
         }
     }
 
@@ -214,7 +267,7 @@ public class AdzunaScanner implements JobSourceScanner {
             return false;
         }
         if (criteria.getLocation() != null && !criteria.getLocation().isBlank()
-                && !isCountryOnlyLocation(criteria.getLocation())
+                && !isBroadLocationFilter(criteria.getLocation())
                 && offer.getLocation() != null && !offer.getLocation().isBlank()
                 && !offer.getLocation().toLowerCase(Locale.ROOT)
                 .contains(criteria.getLocation().toLowerCase(Locale.ROOT))) {
@@ -230,11 +283,15 @@ public class AdzunaScanner implements JobSourceScanner {
         return properties.getCountry();
     }
 
-    private boolean isCountryOnlyLocation(String location) {
+    private boolean isBroadLocationFilter(String location) {
         String normalized = location.trim().toLowerCase(Locale.ROOT);
         return normalized.equals("de")
                 || normalized.equals("deutschland")
                 || normalized.equals("germany")
-                || normalized.equals("germania");
+                || normalized.equals("germania")
+                || normalized.equals("remote")
+                || normalized.equals("homeoffice")
+                || normalized.equals("home office")
+                || normalized.equals("hybrid");
     }
 }

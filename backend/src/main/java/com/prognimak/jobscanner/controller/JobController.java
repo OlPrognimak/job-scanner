@@ -2,6 +2,7 @@ package com.prognimak.jobscanner.controller;
 
 import com.prognimak.jobscanner.dto.ApplicationDraftDto;
 import com.prognimak.jobscanner.dto.JobOfferDto;
+import com.prognimak.jobscanner.dto.PageDto;
 import com.prognimak.jobscanner.dto.ScanRequest;
 import com.prognimak.jobscanner.dto.ScanResultDto;
 import com.prognimak.jobscanner.entity.JobSearchCriteria;
@@ -11,11 +12,13 @@ import com.prognimak.jobscanner.service.ApplicationDraftService;
 import com.prognimak.jobscanner.service.JobScanResult;
 import com.prognimak.jobscanner.service.JobScannerService;
 import java.util.List;
+import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -38,6 +41,22 @@ public class JobController {
     @GetMapping
     public List<JobOfferDto> listJobs() {
         return jobScannerService.findAll().stream().map(jobOfferMapper::toDto).toList();
+    }
+
+    @GetMapping("/history")
+    public PageDto<JobOfferDto> history(@RequestParam(defaultValue = "0") int page,
+                                        @RequestParam(defaultValue = "25") int size) {
+        Page<JobOfferDto> historyPage = jobScannerService.findHistory(page, size)
+                .map(jobOfferMapper::toDto);
+        return new PageDto<>(
+                historyPage.getContent(),
+                historyPage.getNumber(),
+                historyPage.getSize(),
+                historyPage.getTotalElements(),
+                historyPage.getTotalPages(),
+                historyPage.isFirst(),
+                historyPage.isLast()
+        );
     }
 
     @GetMapping("/{id}")

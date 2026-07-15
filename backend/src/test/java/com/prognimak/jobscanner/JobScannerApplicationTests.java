@@ -8,6 +8,8 @@ import org.springframework.boot.test.context.SpringBootTest;
         "spring.datasource.driverClassName=org.h2.Driver",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
+        "spring.jpa.properties.hibernate.default_schema=public",
+        "spring.liquibase.parameters.db-schema=public",
         "spring.liquibase.parameters.text-type=VARCHAR(100000)",
         "spring.ai.openai.api-key=test"
 })

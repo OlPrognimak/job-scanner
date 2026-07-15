@@ -15,6 +15,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -95,8 +98,18 @@ public class JobScannerService {
     public List<JobOffer> findAll() {
         return jobOfferRepository.findAll().stream()
                 .filter(this::isVisibleJobOffer)
-                .sorted(Comparator.comparing(JobOffer::getDetectedAt).reversed())
+                .sorted(Comparator.comparing(this::publicationOrDetectionDate).reversed())
                 .toList();
+    }
+
+    public Page<JobOffer> findHistory(int page, int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(1, size), 100);
+        return jobOfferRepository.findAll(PageRequest.of(
+                safePage,
+                safeSize,
+                Sort.by(Sort.Order.desc("publishedAt"), Sort.Order.desc("detectedAt"), Sort.Order.desc("id"))
+        ));
     }
 
     public JobOffer findById(Long id) {
@@ -137,8 +150,13 @@ public class JobScannerService {
         existingOffer.setContractType(scannedOffer.getContractType());
         existingOffer.setDescription(scannedOffer.getDescription());
         existingOffer.setDetectedAt(scannedOffer.getDetectedAt());
+        existingOffer.setPublishedAt(scannedOffer.getPublishedAt());
         existingOffer.setRateOrSalary(scannedOffer.getRateOrSalary());
         return existingOffer;
+    }
+
+    private java.time.Instant publicationOrDetectionDate(JobOffer jobOffer) {
+        return jobOffer.getPublishedAt() == null ? jobOffer.getDetectedAt() : jobOffer.getPublishedAt();
     }
 
     private boolean isVisibleJobOffer(JobOffer jobOffer) {

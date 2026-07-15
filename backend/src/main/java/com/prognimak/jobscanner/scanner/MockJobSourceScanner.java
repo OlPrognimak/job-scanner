@@ -64,6 +64,7 @@ public class MockJobSourceScanner implements JobSourceScanner {
         offer.setDescription(description);
         offer.setJobUrl(jobUrl);
         offer.setDetectedAt(Instant.now());
+        offer.setPublishedAt(Instant.now().minusSeconds(86_400));
         offer.setRateOrSalary(rateOrSalary);
         return offer;
     }

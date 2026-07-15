@@ -14,6 +14,7 @@ export interface JobOffer {
   description: string
   jobUrl: string
   detectedAt: string
+  publishedAt?: string
   status: JobStatus
   matchScore?: number
   matchExplanation?: string

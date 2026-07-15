@@ -1,23 +1,26 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { generateAnschreiben, listJobs, scanJobs } from '../api/jobs'
+import { generateAnschreiben, scanJobs } from '../api/jobs'
 import { listSearchCriteria } from '../api/searchCriteria'
 import StatusBadge from '../components/StatusBadge.vue'
 import LoadingError from '../components/LoadingError.vue'
 import type { JobOffer, SearchCriteria } from '../types/job'
 
 const jobs = ref<JobOffer[]>([])
+const stateRestored = ref(false)
 const searchCriteria = ref<SearchCriteria[]>([])
 const selectedCriteriaId = ref<string>('adhoc')
 const portalOptions = [
   { value: 'adzuna', label: 'Adzuna' },
+  { value: 'arbeitsagentur', label: 'Arbeitsagentur' },
   { value: 'freelancermap', label: 'freelancermap' },
+  { value: 'meinestadt', label: 'meinestadt.de' },
   { value: 'glassdoor', label: 'Glassdoor' },
   { value: 'stepstone', label: 'StepStone' },
   { value: 'mock', label: 'Mock' }
 ]
-const selectedPortals = ref<string[]>(['adzuna', 'freelancermap'])
+const selectedPortals = ref<string[]>(['adzuna', 'arbeitsagentur', 'freelancermap'])
 const quickScan = reactive({
   keyword: 'Java',
   country: 'de',
@@ -30,6 +33,7 @@ const error = ref('')
 const scanMessage = ref('')
 const scanWarnings = ref<string[]>([])
 const generatingJobId = ref<number | null>(null)
+const selectedJobId = ref<number | null>(null)
 const router = useRouter()
 const filters = reactive({
   title: '',
@@ -40,10 +44,29 @@ const filters = reactive({
   score: '',
   status: ''
 })
-const sortKey = ref<SortableColumn>('detectedAt')
+const sortKey = ref<SortableColumn>('publishedAt')
 const sortDirection = ref<'asc' | 'desc'>('desc')
 
-type SortableColumn = 'title' | 'company' | 'source' | 'location' | 'remoteType' | 'matchScore' | 'status' | 'detectedAt'
+type SortableColumn = 'title' | 'company' | 'source' | 'location' | 'remoteType' | 'matchScore' | 'status' | 'publishedAt'
+
+interface JobsListState {
+  selectedCriteriaId: string
+  selectedPortals: string[]
+  quickScan: {
+    keyword: string
+    country: string
+    location: string
+  }
+  filters: typeof filters
+  sortKey: SortableColumn | 'detectedAt'
+  sortDirection: 'asc' | 'desc'
+  scanMessage: string
+  scanWarnings: string[]
+  jobs: JobOffer[]
+  selectedJobId?: number | null
+}
+
+const storageKey = 'job-scanner.jobs-list-state.v4'
 
 const filteredJobs = computed(() => {
   return [...jobs.value
@@ -62,15 +85,8 @@ const statusOptions = computed(() => uniqueValues(jobs.value.map((job) => job.st
 const sourceOptions = computed(() => uniqueValues(jobs.value.map((job) => job.source)))
 
 async function load() {
-  loading.value = true
-  error.value = ''
-  try {
-    jobs.value = await listJobs()
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Jobs konnten nicht geladen werden.'
-  } finally {
-    loading.value = false
-  }
+  restoreListState()
+  loading.value = false
 }
 
 async function loadSearchCriteria() {
@@ -94,6 +110,7 @@ async function runScan() {
     jobs.value = result.jobs
     scanWarnings.value = result.messages || []
     scanMessage.value = `${result.importedCount} Jobs fuer die ausgewaehlten Suchkriterien gefunden.`
+    saveListState()
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Scan fehlgeschlagen.'
   } finally {
@@ -118,10 +135,12 @@ function scanRequest() {
 }
 
 async function generate(job: JobOffer) {
+  selectJob(job)
   generatingJobId.value = job.id
   error.value = ''
   try {
     await generateAnschreiben(job.id)
+    saveListState()
     await router.push(`/jobs/${job.id}`)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Anschreiben konnte nicht generiert werden.'
@@ -130,13 +149,18 @@ async function generate(job: JobOffer) {
   }
 }
 
+function selectJob(job: JobOffer) {
+  selectedJobId.value = job.id
+  saveListState()
+}
+
 function sortBy(key: SortableColumn) {
   if (sortKey.value === key) {
     sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
     return
   }
   sortKey.value = key
-  sortDirection.value = key === 'matchScore' || key === 'detectedAt' ? 'desc' : 'asc'
+  sortDirection.value = key === 'matchScore' || key === 'publishedAt' ? 'desc' : 'asc'
 }
 
 function sortLabel(key: SortableColumn) {
@@ -177,8 +201,20 @@ function compareJobs(left: JobOffer, right: JobOffer) {
 
 function sortableValue(job: JobOffer, key: SortableColumn) {
   if (key === 'matchScore') return job.matchScore ?? -1
-  if (key === 'detectedAt') return new Date(job.detectedAt).getTime()
+  if (key === 'publishedAt') return job.publishedAt ? new Date(job.publishedAt).getTime() : 0
   return job[key] ?? ''
+}
+
+function publicationDate(job: JobOffer) {
+  return job.publishedAt || ''
+}
+
+function formatDateTime(value?: string) {
+  if (!value) return '-'
+  return new Intl.DateTimeFormat('de-DE', {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  }).format(new Date(value))
 }
 
 function uniqueValues(values: Array<string | undefined>) {
@@ -193,6 +229,56 @@ function formatPortalList(values: string[]) {
     .map((value) => portalOptions.find((option) => option.value === value)?.label || value)
     .join(', ')
 }
+
+function restoreListState() {
+  const stored = sessionStorage.getItem(storageKey)
+  if (!stored) {
+    stateRestored.value = true
+    return false
+  }
+  try {
+    const state = JSON.parse(stored) as JobsListState
+    selectedCriteriaId.value = state.selectedCriteriaId || 'adhoc'
+    selectedPortals.value = state.selectedPortals || ['adzuna', 'arbeitsagentur', 'freelancermap']
+    Object.assign(quickScan, state.quickScan || {})
+    Object.assign(filters, state.filters || {})
+    sortKey.value = state.sortKey === 'detectedAt' ? 'publishedAt' : state.sortKey || 'publishedAt'
+    sortDirection.value = state.sortDirection || 'desc'
+    scanMessage.value = state.scanMessage || ''
+    scanWarnings.value = state.scanWarnings || []
+    jobs.value = Array.isArray(state.jobs) ? state.jobs : []
+    selectedJobId.value = state.selectedJobId ?? null
+    stateRestored.value = true
+    return true
+  } catch {
+    sessionStorage.removeItem(storageKey)
+    stateRestored.value = true
+    return false
+  }
+}
+
+function saveListState() {
+  if (!stateRestored.value) return
+  const state: JobsListState = {
+    selectedCriteriaId: selectedCriteriaId.value,
+    selectedPortals: selectedPortals.value,
+    quickScan: { ...quickScan },
+    filters: { ...filters },
+    sortKey: sortKey.value,
+    sortDirection: sortDirection.value,
+    scanMessage: scanMessage.value,
+    scanWarnings: scanWarnings.value,
+    jobs: jobs.value,
+    selectedJobId: selectedJobId.value
+  }
+  sessionStorage.setItem(storageKey, JSON.stringify(state))
+}
+
+watch(
+  [jobs, selectedCriteriaId, selectedPortals, quickScan, filters, sortKey, sortDirection, scanMessage, scanWarnings, selectedJobId],
+  saveListState,
+  { deep: true }
+)
 
 onMounted(async () => {
   await Promise.all([load(), loadSearchCriteria()])
@@ -285,6 +371,9 @@ onMounted(async () => {
           <th>
             <button class="sort-button" @click="sortBy('status')">Status {{ sortLabel('status') }}</button>
           </th>
+          <th>
+            <button class="sort-button" @click="sortBy('publishedAt')">Veröffentlicht am {{ sortLabel('publishedAt') }}</button>
+          </th>
           <th>Aktionen</th>
         </tr>
         <tr class="filter-row">
@@ -312,28 +401,38 @@ onMounted(async () => {
             </select>
           </th>
           <th></th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(job, index) in filteredJobs" :key="job.id">
+        <tr
+          v-for="(job, index) in filteredJobs"
+          :key="job.id"
+          :class="{ 'selected-row': selectedJobId === job.id }"
+          @click="selectJob(job)"
+        >
           <td class="row-counter">{{ index + 1 }}</td>
-          <td>{{ job.title }}</td>
+          <td>
+            <a class="job-title-link" :href="job.jobUrl" target="_blank" rel="noreferrer" @click="selectJob(job)">
+              {{ job.title }}
+            </a>
+          </td>
           <td>{{ job.company }}</td>
           <td>{{ job.source }}</td>
           <td>{{ job.location }}</td>
           <td>{{ job.remoteType }}</td>
           <td>{{ job.matchScore ?? '-' }}</td>
           <td><StatusBadge :status="job.status" /></td>
+          <td class="date-cell">{{ formatDateTime(publicationDate(job)) }}</td>
           <td class="actions">
-            <a :href="job.jobUrl" target="_blank" rel="noreferrer">Original</a>
             <button :disabled="generatingJobId === job.id" @click="generate(job)">
               {{ generatingJobId === job.id ? 'Generiert...' : 'Anschreiben' }}
             </button>
-            <RouterLink :to="`/jobs/${job.id}`">Details</RouterLink>
+            <RouterLink :to="`/jobs/${job.id}`" @click="selectJob(job)">Details</RouterLink>
           </td>
         </tr>
       </tbody>
     </table>
   </div>
-  <p v-else-if="!loading" class="empty">Noch keine Jobs vorhanden. Starte den ersten Scan.</p>
+  <p v-else-if="!loading" class="empty">Keine aktuellen Scan-Ergebnisse. Waehle Suchkriterien und starte einen Scan.</p>
 </template>

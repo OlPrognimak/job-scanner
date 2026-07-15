@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import JobsListPage from './pages/JobsListPage.vue'
 import JobDetailsPage from './pages/JobDetailsPage.vue'
+import JobHistoryPage from './pages/JobHistoryPage.vue'
 import SearchCriteriaPage from './pages/SearchCriteriaPage.vue'
 import './styles.css'
 
@@ -11,6 +12,7 @@ const router = createRouter({
   routes: [
     { path: '/', redirect: '/jobs' },
     { path: '/jobs', component: JobsListPage },
+    { path: '/jobs/history', component: JobHistoryPage },
     { path: '/jobs/:id', component: JobDetailsPage, props: true },
     { path: '/search-criteria', component: SearchCriteriaPage }
   ]
