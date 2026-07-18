@@ -11,7 +11,7 @@ Full-stack Job Scanner for scanning/importing jobs, storing offers in PostgreSQL
 
 ## Safety Rule
 
-The application never sends CVs or Anschreiben automatically. AI can only create drafts. A draft is sent only when the user clicks `Send application with CV`, which calls `POST /api/drafts/{id}/send`. The current sender is `MockApplicationSender`, so the first implementation only marks the draft as `SENT` and the job as `APPLIED`.
+The application never sends CVs or Anschreiben automatically. AI can only create drafts. A draft is sent only when the user clicks `Send application with CV`, which calls `POST /api/drafts/{id}/send`. By default the sender is `MockApplicationSender`, so local tests only mark the draft as `SENT` and the job as `APPLIED`. Real portal sending must be explicitly enabled by configuration.
 
 ## Run With Docker
 
@@ -238,6 +238,53 @@ FREELANCERMAP_REQUEST_TIMEOUT_SECONDS=15
 ```
 
 The freelancermap scanner sends `keyword` to freelancermap as the portal search query and trusts the returned result set for keyword relevance. Local filtering is only applied for structured fields such as remote type, contract type, and location.
+
+## Sending Applications With Freelancermap
+
+The freelancermap sender uses Playwright and a visible Chromium browser. It does not need your CV file path because it selects an existing CV checkbox/radio on freelancermap when one is available. Login is handled by the browser session, not by storing credentials in the application.
+
+Install the Playwright browser once:
+
+```bash
+cd backend
+../mvnw exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chromium"
+```
+
+Start the backend with the freelancermap sender:
+
+```bash
+export APPLICATION_SENDER=freelancermap
+export FREELANCERMAP_PLAYWRIGHT_HEADLESS=false
+export FREELANCERMAP_PLAYWRIGHT_USER_DATA_DIR=../.playwright/freelancermap
+../mvnw spring-boot:run
+```
+
+First run:
+
+1. Generate or open an Anschreiben draft for a freelancermap job.
+2. Click `Send application with CV` in the app.
+3. A Chromium window opens. If freelancermap asks for login, log in manually.
+4. The sender opens the application form, fills the Anschreiben, selects an existing CV option when detected, and submits after the frontend click.
+
+Useful sender settings:
+
+```bash
+APPLICATION_SENDER=freelancermap
+FREELANCERMAP_PLAYWRIGHT_HEADLESS=false
+FREELANCERMAP_PLAYWRIGHT_USER_DATA_DIR=../.playwright/freelancermap
+FREELANCERMAP_PLAYWRIGHT_BROWSER_CHANNEL=chrome
+FREELANCERMAP_PLAYWRIGHT_TIMEOUT_SECONDS=180
+FREELANCERMAP_MANUAL_LOGIN_TIMEOUT_SECONDS=300
+FREELANCERMAP_SUBMIT_ENABLED=true
+```
+
+If you prefer to use your installed Google Chrome instead of Playwright Chromium, set:
+
+```bash
+FREELANCERMAP_PLAYWRIGHT_BROWSER_CHANNEL=chrome
+```
+
+The browser profile directory `.playwright/` is ignored by git so login cookies are not committed.
 
 Glassdoor can serve limited, login-gated, JavaScript-heavy pages, or a `Security | Glassdoor` 403 page depending on request context. The scanner works with public server-rendered result cards and skips cleanly when Glassdoor blocks the request.
 

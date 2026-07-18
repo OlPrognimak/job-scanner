@@ -1,11 +1,13 @@
 package com.prognimak.jobscanner.sender;
 
 import com.prognimak.jobscanner.entity.ApplicationDraft;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(prefix = "job-scanner.sender", name = "type", havingValue = "mock", matchIfMissing = true)
 public class MockApplicationSender implements ApplicationSender {
 
     private static final Logger log = LoggerFactory.getLogger(MockApplicationSender.class);

@@ -10,6 +10,7 @@ public class JobScannerProperties {
     private String cvFilePath = "../documents/cv.docx";
     private boolean aiMatchingDuringScan = false;
     private Scanners scanners = new Scanners();
+    private Sender sender = new Sender();
 
     public String getCandidateProfilePath() {
         return candidateProfilePath;
@@ -49,6 +50,121 @@ public class JobScannerProperties {
 
     public void setScanners(Scanners scanners) {
         this.scanners = scanners;
+    }
+
+    public Sender getSender() {
+        return sender;
+    }
+
+    public void setSender(Sender sender) {
+        this.sender = sender;
+    }
+
+    public static class Sender {
+
+        private String type = "mock";
+        private FreelancermapSender freelancermap = new FreelancermapSender();
+
+        public String getType() {
+            return type;
+        }
+
+        public void setType(String type) {
+            this.type = type;
+        }
+
+        public FreelancermapSender getFreelancermap() {
+            return freelancermap;
+        }
+
+        public void setFreelancermap(FreelancermapSender freelancermap) {
+            this.freelancermap = freelancermap;
+        }
+    }
+
+    public static class FreelancermapSender {
+
+        private String baseUrl = "https://www.freelancermap.de";
+        private String loginUrl = "https://www.freelancermap.de/login";
+        private String userDataDir = "../.playwright/freelancermap";
+        private String browserChannel = "";
+        private boolean headless = false;
+        private boolean submitEnabled = true;
+        private int slowMoMs = 100;
+        private int timeoutSeconds = 180;
+        private int manualLoginTimeoutSeconds = 300;
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public String getLoginUrl() {
+            return loginUrl;
+        }
+
+        public void setLoginUrl(String loginUrl) {
+            this.loginUrl = loginUrl;
+        }
+
+        public String getUserDataDir() {
+            return userDataDir;
+        }
+
+        public void setUserDataDir(String userDataDir) {
+            this.userDataDir = userDataDir;
+        }
+
+        public String getBrowserChannel() {
+            return browserChannel;
+        }
+
+        public void setBrowserChannel(String browserChannel) {
+            this.browserChannel = browserChannel;
+        }
+
+        public boolean isHeadless() {
+            return headless;
+        }
+
+        public void setHeadless(boolean headless) {
+            this.headless = headless;
+        }
+
+        public boolean isSubmitEnabled() {
+            return submitEnabled;
+        }
+
+        public void setSubmitEnabled(boolean submitEnabled) {
+            this.submitEnabled = submitEnabled;
+        }
+
+        public int getSlowMoMs() {
+            return slowMoMs;
+        }
+
+        public void setSlowMoMs(int slowMoMs) {
+            this.slowMoMs = slowMoMs;
+        }
+
+        public int getTimeoutSeconds() {
+            return timeoutSeconds;
+        }
+
+        public void setTimeoutSeconds(int timeoutSeconds) {
+            this.timeoutSeconds = timeoutSeconds;
+        }
+
+        public int getManualLoginTimeoutSeconds() {
+            return manualLoginTimeoutSeconds;
+        }
+
+        public void setManualLoginTimeoutSeconds(int manualLoginTimeoutSeconds) {
+            this.manualLoginTimeoutSeconds = manualLoginTimeoutSeconds;
+        }
     }
 
     public static class Scanners {

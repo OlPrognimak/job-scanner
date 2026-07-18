@@ -31,6 +31,18 @@ job-scanner:
   candidate-context-path: ${CANDIDATE_CONTEXT_PATH:file:../documents/candidate-context.md}
   cv-file-path: ${CV_FILE_PATH:../documents/cv.docx}
   ai-matching-during-scan: ${AI_MATCHING_DURING_SCAN:false}
+  sender:
+    type: ${APPLICATION_SENDER:freelancermap}
+    freelancermap:
+      base-url: ${FREELANCERMAP_SENDER_BASE_URL:https://www.freelancermap.de}
+      login-url: ${FREELANCERMAP_SENDER_LOGIN_URL:https://www.freelancermap.de/login}
+      user-data-dir: ${FREELANCERMAP_PLAYWRIGHT_USER_DATA_DIR:../.playwright/freelancermap}
+      browser-channel: ${FREELANCERMAP_PLAYWRIGHT_BROWSER_CHANNEL:}
+      headless: ${FREELANCERMAP_PLAYWRIGHT_HEADLESS:false}
+      submit-enabled: ${FREELANCERMAP_SUBMIT_ENABLED:true}
+      slow-mo-ms: ${FREELANCERMAP_PLAYWRIGHT_SLOW_MO_MS:100}
+      timeout-seconds: ${FREELANCERMAP_PLAYWRIGHT_TIMEOUT_SECONDS:180}
+      manual-login-timeout-seconds: ${FREELANCERMAP_MANUAL_LOGIN_TIMEOUT_SECONDS:300}
   scanners:
     enabled: ${SCANNERS_ENABLED:mock,freelancermap,adzuna,arbeitsagentur,meinestadt,glassdoor,stepstone}
     freelancermap:
