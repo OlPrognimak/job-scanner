@@ -1,12 +1,18 @@
 package com.prognimak.jobscanner.scanner;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.prognimak.jobscanner.config.JobScannerProperties;
 import com.prognimak.jobscanner.entity.ContractType;
 import com.prognimak.jobscanner.entity.JobOffer;
 import com.prognimak.jobscanner.entity.JobSearchCriteria;
 import com.prognimak.jobscanner.entity.RemoteType;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -17,9 +23,11 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionService;
@@ -33,6 +41,8 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -42,6 +52,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class FreelancermapScanner implements JobSourceScanner {
 
     private static final Logger log = LoggerFactory.getLogger(FreelancermapScanner.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final String AJAX_PAGE_CHANGE_PAYLOAD = "{\"changed\":[\"pagenr\"]}";
     private static final Set<String> GENERIC_TITLES = Set.of(
             "finden sie das passende projekt",
             "freelance projekte finden",
@@ -65,23 +77,75 @@ public class FreelancermapScanner implements JobSourceScanner {
 
     private final RestClient restClient;
     private final JobScannerProperties.Freelancermap properties;
+    private final String cookieHeader;
 
     public FreelancermapScanner(RestClient.Builder restClientBuilder, JobScannerProperties properties) {
         this.properties = properties.getScanners().getFreelancermap();
+        this.cookieHeader = resolveCookieHeader(this.properties);
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         Duration timeout = Duration.ofSeconds(Math.max(1, this.properties.getRequestTimeoutSeconds()));
         requestFactory.setConnectTimeout(timeout);
         requestFactory.setReadTimeout(timeout);
-        this.restClient = restClientBuilder
+        RestClient.Builder builder = restClientBuilder
                 .requestFactory(requestFactory)
                 .defaultHeader("User-Agent", this.properties.getUserAgent())
-                .defaultHeader("Accept", "text/html,application/xhtml+xml")
-                .build();
+                .defaultHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .defaultHeader("Accept-Language", "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7")
+                .defaultHeader("Cache-Control", "no-cache")
+                .defaultHeader("Pragma", "no-cache");
+        if (hasText(this.cookieHeader)) {
+            builder.defaultHeader(HttpHeaders.COOKIE, this.cookieHeader);
+        }
+        this.restClient = builder.build();
+        log.info("Freelancermap scanner initialized: authenticatedCookieConfigured={}, cookieLength={}",
+                hasText(this.cookieHeader), this.cookieHeader.length());
     }
 
     @Override
     public String source() {
         return "freelancermap";
+    }
+
+    private String resolveCookieHeader(JobScannerProperties.Freelancermap properties) {
+        String rawCookieHeader;
+        if (hasText(properties.getCookieHeader())) {
+            rawCookieHeader = properties.getCookieHeader().trim();
+        } else if (hasText(properties.getCookieFile())) {
+            try {
+                rawCookieHeader = Files.readString(Path.of(properties.getCookieFile()), StandardCharsets.UTF_8).trim();
+            } catch (IOException ex) {
+                throw new IllegalStateException("Could not read freelancermap cookie file: " + properties.getCookieFile(), ex);
+            }
+        } else {
+            return "";
+        }
+        String filteredCookieHeader = filterCookieHeader(rawCookieHeader, properties.getCookieNames());
+        return hasText(filteredCookieHeader) ? filteredCookieHeader : rawCookieHeader;
+    }
+
+    private String filterCookieHeader(String rawCookieHeader, String cookieNames) {
+        if (!hasText(rawCookieHeader) || !hasText(cookieNames)) {
+            return rawCookieHeader;
+        }
+        Set<String> allowedNames = java.util.Arrays.stream(cookieNames.split(","))
+                .map(String::trim)
+                .filter(name -> !name.isBlank())
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (allowedNames.isEmpty()) {
+            return rawCookieHeader;
+        }
+        List<String> selectedCookies = new ArrayList<>();
+        for (String cookie : rawCookieHeader.split(";\\s*")) {
+            int separator = cookie.indexOf('=');
+            if (separator <= 0) {
+                continue;
+            }
+            String name = cookie.substring(0, separator).trim();
+            if (allowedNames.contains(name)) {
+                selectedCookies.add(cookie.trim());
+            }
+        }
+        return String.join("; ", selectedCookies);
     }
 
     @Override
@@ -91,14 +155,27 @@ public class FreelancermapScanner implements JobSourceScanner {
         }
 
         long startedAt = System.nanoTime();
+        List<List<JobOffer>> offersByPage = fetchSearchResultPagesWithHttp(criteria);
+
+        List<JobOffer> candidates = selectAcrossPages(offersByPage);
+        List<JobOffer> offers = fetchDetailsInParallel(candidates, criteria);
+        long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000;
+        log.info("Freelancermap scan finished: pages={}, candidates={}, imported={}, elapsedMs={}",
+                Math.max(1, properties.getMaxPages()), candidates.size(), offers.size(), elapsedMs);
+        return offers;
+    }
+
+    private List<List<JobOffer>> fetchSearchResultPagesWithHttp(JobSearchCriteria criteria) {
         List<List<JobOffer>> offersByPage = new ArrayList<>();
         for (int page = 1; page <= Math.max(1, properties.getMaxPages()); page++) {
             String searchUrl = buildSearchUrl(criteria, page);
             try {
-                log.info("Freelancermap scan page {} started: keyword={}, location={}",
-                        page, criteria.getKeyword(), criteria.getLocation());
-                String html = fetch(searchUrl);
-                List<JobOffer> pageOffers = extractOffersFromSearchPage(html, searchUrl, null);
+                log.info("Freelancermap scan page {} started: url={}", page, searchUrl);
+                List<JobOffer> pageOffers = page == 1
+                        ? fetchSearchResultPageWithHtml(searchUrl)
+                        : fetchSearchResultPageWithAjax(criteria, page, buildAjaxRefererUrl(criteria));
+                log.info("Freelancermap scan page {} extracted {} candidate cards", page, pageOffers.size());
+                log.info("Freelancermap HTTP scan page {} ids: {}", page, describeOffers(pageOffers));
                 offersByPage.add(pageOffers);
                 delay();
             } catch (RuntimeException ex) {
@@ -109,12 +186,46 @@ public class FreelancermapScanner implements JobSourceScanner {
                         ex);
             }
         }
+        return offersByPage;
+    }
 
-        List<JobOffer> candidates = selectAcrossPages(offersByPage);
-        List<JobOffer> offers = fetchDetailsInParallel(candidates, criteria);
-        long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000;
-        log.info("Freelancermap scan finished: pages={}, candidates={}, imported={}, elapsedMs={}",
-                Math.max(1, properties.getMaxPages()), candidates.size(), offers.size(), elapsedMs);
+    private List<JobOffer> fetchSearchResultPageWithHtml(String searchUrl) {
+        String html = fetch(searchUrl);
+        return extractOffersFromSearchPage(html, searchUrl, null);
+    }
+
+    private List<JobOffer> fetchSearchResultPageWithAjax(JobSearchCriteria criteria, int requestedPage, String referer) {
+        String ajaxUrl = buildAjaxSearchUrl(criteria, requestedPage);
+        String json = restClient.post()
+                .uri(URI.create(ajaxUrl))
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HttpHeaders.ACCEPT, "*/*")
+                .header(HttpHeaders.ORIGIN, properties.getBaseUrl())
+                .header("X-Requested-With", "XMLHttpRequest")
+                .header("Referer", referer)
+                .header("DNT", "1")
+                .header("Priority", "u=1, i")
+                .header("Sec-CH-UA", "\"Not;A=Brand\";v=\"8\", \"Chromium\";v=\"150\", \"Google Chrome\";v=\"150\"")
+                .header("Sec-CH-UA-Mobile", "?0")
+                .header("Sec-CH-UA-Platform", "\"macOS\"")
+                .header("Sec-Fetch-Dest", "empty")
+                .header("Sec-Fetch-Mode", "cors")
+                .header("Sec-Fetch-Site", "same-origin")
+                .body(AJAX_PAGE_CHANGE_PAYLOAD)
+                .retrieve()
+                .body(String.class);
+        List<JobOffer> offers = extractOffersFromAjaxResult(json, ajaxUrl, criteria);
+        int returnedPage = extractAjaxCurrentPage(json);
+        log.info("Freelancermap AJAX page diagnostic: requestedPage={}, returnedPage={}, cookieConfigured={}, cookieLength={}, ids={}",
+                requestedPage,
+                returnedPage,
+                hasText(cookieHeader),
+                cookieHeader.length(),
+                describeOffers(offers));
+        if (returnedPage != requestedPage) {
+            log.warn("Freelancermap AJAX returned page {} for requested page {}. url={}",
+                    returnedPage, requestedPage, ajaxUrl);
+        }
         return offers;
     }
 
@@ -183,23 +294,51 @@ public class FreelancermapScanner implements JobSourceScanner {
         int maxCandidates = Math.max(Math.max(1, properties.getMaxDetails()), properties.getMaxCandidates());
         List<JobOffer> selected = new ArrayList<>();
         Set<String> seenUrls = new LinkedHashSet<>();
-        int maxPageSize = offersByPage.stream().mapToInt(List::size).max().orElse(0);
+        int rawCandidates = 0;
+        int duplicates = 0;
 
-        for (int index = 0; index < maxPageSize && selected.size() < maxCandidates; index++) {
-            for (List<JobOffer> pageOffers : offersByPage) {
-                if (index >= pageOffers.size()) {
-                    continue;
-                }
-                JobOffer offer = pageOffers.get(index);
-                if (seenUrls.add(offer.getJobUrl())) {
+        for (List<JobOffer> pageOffers : offersByPage) {
+            for (JobOffer offer : pageOffers) {
+                rawCandidates++;
+                String key = dedupeKey(offer);
+                if (seenUrls.add(key)) {
                     selected.add(offer);
+                } else {
+                    duplicates++;
                 }
                 if (selected.size() >= maxCandidates) {
                     break;
                 }
             }
+            if (selected.size() >= maxCandidates) {
+                break;
+            }
         }
+        log.info("Freelancermap candidate merge finished: rawCards={}, uniqueCandidates={}, duplicates={}, maxCandidates={}",
+                rawCandidates, selected.size(), duplicates, maxCandidates);
+        log.info("Freelancermap selected candidate ids: {}", describeOffers(selected));
         return selected;
+    }
+
+    private String dedupeKey(JobOffer offer) {
+        if (offer.getSourceJobId() != null && !offer.getSourceJobId().isBlank()) {
+            return offer.getSource() + ":" + offer.getSourceJobId();
+        }
+        return offer.getJobUrl();
+    }
+
+    private String describeOffers(List<JobOffer> offers) {
+        int limit = 80;
+        List<String> descriptions = offers.stream()
+                .limit(limit)
+                .map(offer -> "%s:%s".formatted(
+                        offer.getSourceJobId() == null || offer.getSourceJobId().isBlank()
+                                ? extractProjectSlug(offer.getJobUrl())
+                                : offer.getSourceJobId(),
+                        trimTo(safeText(offer.getTitle()).replaceAll("\\s+", " "), 80)))
+                .toList();
+        String suffix = offers.size() > limit ? " ... +" + (offers.size() - limit) + " more" : "";
+        return descriptions + suffix;
     }
 
     private String buildSearchUrl(JobSearchCriteria criteria, int page) {
@@ -209,15 +348,40 @@ public class FreelancermapScanner implements JobSourceScanner {
         if (criteria.getKeyword() != null && !criteria.getKeyword().isBlank()) {
             builder.queryParam("query", criteria.getKeyword());
         }
+        builder.queryParam("countries[]", 1)
+                .queryParam("sort", 1);
         if (criteria.getLocation() != null && !criteria.getLocation().isBlank()
                 && !isCountryOnlyLocation(criteria.getLocation())) {
-            builder.queryParam("continents", "")
-                    .queryParam("countries", "")
-                    .queryParam("states", "")
-                    .queryParam("city", criteria.getLocation());
+            builder.queryParam("city", criteria.getLocation());
         }
         if (page > 1) {
             builder.queryParam("pagenr", page);
+        }
+        return builder.build().encode(StandardCharsets.UTF_8).toUriString();
+    }
+
+    private String buildAjaxSearchUrl(JobSearchCriteria criteria, int page) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(properties.getBaseUrl())
+                .path("/project/search/ajax");
+
+        if (criteria.getKeyword() != null && !criteria.getKeyword().isBlank()) {
+            builder.queryParam("query", criteria.getKeyword());
+        }
+        builder.queryParam("countries[]", 1)
+                .queryParam("sort", 1)
+                .queryParam("pagenr", page);
+        if (criteria.getLocation() != null && !criteria.getLocation().isBlank()
+                && !isCountryOnlyLocation(criteria.getLocation())) {
+            builder.queryParam("city", criteria.getLocation());
+        }
+        return builder.build().encode(StandardCharsets.UTF_8).toUriString();
+    }
+
+    private String buildAjaxRefererUrl(JobSearchCriteria criteria) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(properties.getBaseUrl())
+                .path(properties.getSearchPath());
+        if (criteria.getKeyword() != null && !criteria.getKeyword().isBlank()) {
+            builder.queryParam("query", criteria.getKeyword());
         }
         return builder.build().encode(StandardCharsets.UTF_8).toUriString();
     }
@@ -229,8 +393,60 @@ public class FreelancermapScanner implements JobSourceScanner {
                 .body(String.class);
     }
 
+    private Map<String, String> extractProjectIdsBySlug(String html) {
+        Map<String, String> idsBySlug = new HashMap<>();
+        if (html == null || html.isBlank()) {
+            return idsBySlug;
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("\"id\"\\s*:\\s*(\\d+)\\s*,\\s*\"slug\"\\s*:\\s*\"((?:\\\\.|[^\"])*)\"")
+                .matcher(html);
+        while (matcher.find()) {
+            idsBySlug.put(decodeJsonText(matcher.group(2)), matcher.group(1));
+        }
+        return idsBySlug;
+    }
+
+    private String extractProjectId(String href, String jobUrl, Map<String, String> projectIdsBySlug) {
+        String idFromHref = extractQueryParameter(href, "id");
+        if (!idFromHref.isBlank()) {
+            return idFromHref;
+        }
+        String idFromUrl = extractQueryParameter(jobUrl, "id");
+        if (!idFromUrl.isBlank()) {
+            return idFromUrl;
+        }
+        String slug = extractProjectSlug(jobUrl);
+        return projectIdsBySlug.getOrDefault(slug, "");
+    }
+
+    private String extractQueryParameter(String url, String parameterName) {
+        if (url == null || url.isBlank()) {
+            return "";
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("(?:[?&]|&amp;)" + java.util.regex.Pattern.quote(parameterName) + "=(\\d+)")
+                .matcher(url);
+        return matcher.find() ? matcher.group(1) : "";
+    }
+
+    private String extractProjectSlug(String url) {
+        if (url == null || url.isBlank()) {
+            return "";
+        }
+        String normalized = normalizeUrl(url);
+        int marker = normalized.indexOf("/projekt/");
+        if (marker < 0) {
+            return "";
+        }
+        String slug = normalized.substring(marker + "/projekt/".length());
+        int slash = slug.indexOf('/');
+        return slash >= 0 ? slug.substring(0, slash) : slug;
+    }
+
     List<JobOffer> extractOffersFromSearchPage(String html, String baseUrl, JobSearchCriteria criteria) {
         Document document = Jsoup.parse(html, baseUrl);
+        Map<String, String> projectIdsBySlug = extractProjectIdsBySlug(html);
         List<JobOffer> offers = new ArrayList<>();
         for (Element card : document.select(".project-card")) {
             Element titleLink = card.selectFirst("a[data-testid=title][data-id=project-card-title], a[data-id=project-card-title]");
@@ -245,6 +461,7 @@ public class FreelancermapScanner implements JobSourceScanner {
 
             JobOffer offer = new JobOffer();
             offer.setSource(source());
+            offer.setSourceJobId(extractProjectId(titleLink.attr("href"), jobUrl, projectIdsBySlug));
             offer.setTitle(title);
             offer.setCompany(extractCardCompany(card));
             offer.setLocation(extractCardLocation(card));
@@ -292,6 +509,7 @@ public class FreelancermapScanner implements JobSourceScanner {
 
         JobOffer offer = new JobOffer();
         offer.setSource(source());
+        offer.setSourceJobId(extractProjectId(detailUrl, normalizeUrl(detailUrl), Map.of()));
         offer.setTitle(title);
         offer.setCompany(extractDetailCompany(document, html));
         offer.setLocation(extractDetailLocation(document, html));
@@ -329,6 +547,9 @@ public class FreelancermapScanner implements JobSourceScanner {
         }
         if (cardOffer.getPublishedAt() != null) {
             offer.setPublishedAt(cardOffer.getPublishedAt());
+        }
+        if (offer.getSourceJobId() == null || offer.getSourceJobId().isBlank()) {
+            offer.setSourceJobId(cardOffer.getSourceJobId());
         }
     }
 
@@ -439,6 +660,168 @@ public class FreelancermapScanner implements JobSourceScanner {
         }
         matcher.appendTail(result);
         return Jsoup.parse(result.toString()).text().trim();
+    }
+
+    List<JobOffer> extractOffersFromAjaxResult(String json, String baseUrl, JobSearchCriteria criteria) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(json);
+            JsonNode projects = root.path("projects");
+            if (!projects.isArray()) {
+                return List.of();
+            }
+            List<JobOffer> offers = new ArrayList<>();
+            for (JsonNode project : projects) {
+                Optional<JobOffer> offer = mapAjaxProject(project, baseUrl);
+                if (offer.isPresent() && matchesLocalCriteria(offer.get(), criteria)) {
+                    offers.add(offer.get());
+                }
+            }
+            return offers;
+        } catch (JsonProcessingException ex) {
+            throw new ScannerBlockedException(source(), "freelancermap AJAX response was not valid JSON.", ex);
+        }
+    }
+
+    private int extractAjaxCurrentPage(String json) {
+        if (json == null || json.isBlank()) {
+            return -1;
+        }
+        try {
+            return OBJECT_MAPPER.readTree(json).path("currentPage").asInt(-1);
+        } catch (JsonProcessingException ex) {
+            return -1;
+        }
+    }
+
+    private Optional<JobOffer> mapAjaxProject(JsonNode project, String baseUrl) {
+        String id = text(project, "id");
+        String title = cleanTitle(text(project, "title"));
+        String jobUrl = normalizeAjaxProjectUrl(project, baseUrl);
+        if (id.isBlank() || isGenericTitle(title) || jobUrl.isBlank()) {
+            return Optional.empty();
+        }
+
+        JobOffer offer = new JobOffer();
+        offer.setSource(source());
+        offer.setSourceJobId(id);
+        offer.setTitle(title);
+        offer.setCompany(text(project, "company"));
+        offer.setLocation(extractAjaxLocation(project));
+        offer.setRemoteType(detectAjaxRemoteType(project));
+        offer.setContractType(detectAjaxContractType(project));
+        offer.setDescription(extractAjaxDescription(project));
+        offer.setJobUrl(jobUrl);
+        offer.setDetectedAt(Instant.now());
+        offer.setPublishedAt(parsePortalDate(text(project, "created")).orElse(null));
+        offer.setRateOrSalary(extractRate(extractAjaxSearchableText(project)));
+        return Optional.of(offer);
+    }
+
+    private String normalizeAjaxProjectUrl(JsonNode project, String baseUrl) {
+        String url = text(project, "url");
+        if (url.isBlank()) {
+            url = text(project.path("links"), "project");
+        }
+        if (url.isBlank()) {
+            String slug = text(project, "slug");
+            if (!slug.isBlank()) {
+                url = "/projekt/" + slug;
+            }
+        }
+        if (url.isBlank()) {
+            return "";
+        }
+        return normalizeUrl(Jsoup.parse("<a href=\"" + url + "\"></a>", baseUrl).selectFirst("a").absUrl("href"));
+    }
+
+    private String extractAjaxLocation(JsonNode project) {
+        String city = text(project, "city");
+        String country = text(project.path("country"), "nameDe");
+        if (country.isBlank()) {
+            country = text(project.path("country"), "name");
+        }
+        if (!city.isBlank() && !country.isBlank()) {
+            return city + ", " + country;
+        }
+        if (!city.isBlank()) {
+            return city;
+        }
+        JsonNode locations = project.path("locations");
+        if (locations.isArray() && !locations.isEmpty()) {
+            return text(locations.get(0), "name");
+        }
+        return "";
+    }
+
+    private RemoteType detectAjaxRemoteType(JsonNode project) {
+        JsonNode remoteInPercent = project.path("projectContractType").path("remoteInPercent");
+        if (remoteInPercent.canConvertToInt()) {
+            return remoteInPercent.asInt() > 0 ? RemoteType.REMOTE : RemoteType.ON_SITE;
+        }
+        return detectRemoteType(extractAjaxSearchableText(project));
+    }
+
+    private ContractType detectAjaxContractType(JsonNode project) {
+        String type = text(project.path("projectContractType"), "type");
+        if (type.equals("permanent_position")) {
+            return ContractType.PERMANENT;
+        }
+        return detectContractType(extractAjaxSearchableText(project));
+    }
+
+    private String extractAjaxDescription(JsonNode project) {
+        List<String> parts = new ArrayList<>();
+        String description = Jsoup.parse(text(project, "description")).text().trim();
+        if (!description.isBlank()) {
+            parts.add(description);
+        }
+        String skills = extractAjaxSkills(project);
+        if (!skills.isBlank()) {
+            parts.add("Skills: " + skills);
+        }
+        return trimTo(String.join("\n", parts), 12000);
+    }
+
+    private String extractAjaxSkills(JsonNode project) {
+        JsonNode skills = project.path("skills");
+        if (!skills.isArray()) {
+            return "";
+        }
+        List<String> values = new ArrayList<>();
+        for (JsonNode skill : skills) {
+            String name = text(skill, "de");
+            if (name.isBlank()) {
+                name = text(skill, "en");
+            }
+            if (name.isBlank()) {
+                name = text(skill, "name");
+            }
+            if (!name.isBlank()) {
+                values.add(name);
+            }
+        }
+        return String.join(", ", values);
+    }
+
+    private String extractAjaxSearchableText(JsonNode project) {
+        return String.join(" ",
+                text(project, "title"),
+                text(project, "description"),
+                text(project, "contractType"),
+                text(project.path("projectContractType"), "type"),
+                text(project.path("projectContractType"), "remoteInPercent"),
+                extractAjaxSkills(project));
+    }
+
+    private String text(JsonNode node, String fieldName) {
+        JsonNode value = node.path(fieldName);
+        if (value.isMissingNode() || value.isNull()) {
+            return "";
+        }
+        return value.asText("").trim();
     }
 
     private String extractCardCompany(Element card) {
@@ -783,6 +1166,10 @@ public class FreelancermapScanner implements JobSourceScanner {
 
     private String safeText(String value) {
         return value == null ? "" : value;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private boolean isCountryOnlyLocation(String location) {

@@ -90,6 +90,7 @@ public class JobScannerProperties {
         private String browserChannel = "";
         private boolean headless = false;
         private boolean submitEnabled = true;
+        private String requiredDocumentLabels = "Lebenslauf_10.07.26.pdf";
         private int slowMoMs = 100;
         private int timeoutSeconds = 180;
         private int manualLoginTimeoutSeconds = 300;
@@ -140,6 +141,14 @@ public class JobScannerProperties {
 
         public void setSubmitEnabled(boolean submitEnabled) {
             this.submitEnabled = submitEnabled;
+        }
+
+        public String getRequiredDocumentLabels() {
+            return requiredDocumentLabels;
+        }
+
+        public void setRequiredDocumentLabels(String requiredDocumentLabels) {
+            this.requiredDocumentLabels = requiredDocumentLabels;
         }
 
         public int getSlowMoMs() {
@@ -221,13 +230,17 @@ public class JobScannerProperties {
         private String baseUrl = "https://www.freelancermap.de";
         private String searchPath = "/projekte";
         private boolean enabled = true;
-        private int maxPages = 1;
+        private int maxPages = 3;
         private int maxDetails = 10;
-        private int maxCandidates = 20;
+        private int maxCandidates = 100;
         private int maxParallelDetailRequests = 6;
         private long requestDelayMs = 250;
         private int requestTimeoutSeconds = 15;
-        private String userAgent = "Mozilla/5.0 JobScannerBot/1.0";
+        private String userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36";
+        private String cookieHeader = "";
+        private String cookieFile = "";
+        private String cookieNames = "REMEMBERME,PHPSESSID";
 
         public String getBaseUrl() {
             return baseUrl;
@@ -307,6 +320,30 @@ public class JobScannerProperties {
 
         public void setUserAgent(String userAgent) {
             this.userAgent = userAgent;
+        }
+
+        public String getCookieHeader() {
+            return cookieHeader;
+        }
+
+        public void setCookieHeader(String cookieHeader) {
+            this.cookieHeader = cookieHeader;
+        }
+
+        public String getCookieFile() {
+            return cookieFile;
+        }
+
+        public void setCookieFile(String cookieFile) {
+            this.cookieFile = cookieFile;
+        }
+
+        public String getCookieNames() {
+            return cookieNames;
+        }
+
+        public void setCookieNames(String cookieNames) {
+            this.cookieNames = cookieNames;
         }
     }
 

@@ -72,7 +72,7 @@ public class JobScannerService {
                 }
                 int sourceSavedCount = 0;
                 for (JobOffer scannedOffer : scannedOffers) {
-                    JobOffer offer = jobOfferRepository.findByJobUrl(scannedOffer.getJobUrl())
+                    JobOffer offer = findExistingOffer(scannedOffer)
                             .map(existingOffer -> refreshFromScan(existingOffer, scannedOffer))
                             .orElse(scannedOffer);
                     if (offer.getId() == null && properties.isAiMatchingDuringScan()) {
@@ -138,11 +138,23 @@ public class JobScannerService {
         return sources.stream()
                 .anyMatch(source -> source.equals(scannerSource)
                         || source.contains(scannerSource)
-                        || scannerSource.contains(source));
+                || scannerSource.contains(source));
+    }
+
+    private java.util.Optional<JobOffer> findExistingOffer(JobOffer scannedOffer) {
+        if (hasText(scannedOffer.getSource()) && hasText(scannedOffer.getSourceJobId())) {
+            java.util.Optional<JobOffer> existingBySourceJobId = jobOfferRepository.findBySourceAndSourceJobId(
+                    scannedOffer.getSource(), scannedOffer.getSourceJobId());
+            if (existingBySourceJobId.isPresent()) {
+                return existingBySourceJobId;
+            }
+        }
+        return jobOfferRepository.findByJobUrl(scannedOffer.getJobUrl());
     }
 
     private JobOffer refreshFromScan(JobOffer existingOffer, JobOffer scannedOffer) {
         existingOffer.setSource(scannedOffer.getSource());
+        existingOffer.setSourceJobId(scannedOffer.getSourceJobId());
         existingOffer.setTitle(scannedOffer.getTitle());
         existingOffer.setCompany(scannedOffer.getCompany());
         existingOffer.setLocation(scannedOffer.getLocation());
@@ -153,6 +165,10 @@ public class JobScannerService {
         existingOffer.setPublishedAt(scannedOffer.getPublishedAt());
         existingOffer.setRateOrSalary(scannedOffer.getRateOrSalary());
         return existingOffer;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private java.time.Instant publicationOrDetectionDate(JobOffer jobOffer) {

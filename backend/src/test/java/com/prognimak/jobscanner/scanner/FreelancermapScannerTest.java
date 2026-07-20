@@ -88,6 +88,82 @@ class FreelancermapScannerTest {
     }
 
     @Test
+    void extractsFreelancermapProjectIdFromEmbeddedSearchState() {
+        String html = """
+                <html>
+                  <body>
+                    <script type="application/json" class="js-react-on-rails-component">
+                      {"initialState":{"result":{"projects":[
+                        {"id":3024633,"slug":"backend-entwickler-java-spring-boot","title":"Backend-Entwickler Java Spring Boot"}
+                      ]}}}
+                    </script>
+                    <div class="project-card">
+                      <div class="project-info">
+                        <div>Hays AG</div>
+                        <div>
+                          <a data-testid="title" data-id="project-card-title" href="/projekt/backend-entwickler-java-spring-boot">
+                            Backend-Entwickler Java Spring Boot
+                          </a>
+                        </div>
+                        <div class="project-info-list">
+                          <div data-testid="city">Remote</div>
+                          <div data-testid="remoteInPercent">100% Remote</div>
+                          <div data-testid="type">Freiberuflich</div>
+                        </div>
+                      </div>
+                    </div>
+                  </body>
+                </html>
+                """;
+
+        var offers = scanner.extractOffersFromSearchPage(html, "https://www.freelancermap.de/projekte?query=java", null);
+
+        assertThat(offers).hasSize(1);
+        assertThat(offers.getFirst().getSourceJobId()).isEqualTo("3024633");
+    }
+
+    @Test
+    void extractsOffersFromAjaxProjectResults() {
+        String json = """
+                {
+                  "projects": [
+                    {
+                      "id": 3024633,
+                      "slug": "backend-entwickler-java-spring-boot",
+                      "title": "Backend-Entwickler Java Spring Boot",
+                      "company": "Hays AG",
+                      "city": "Koeln",
+                      "country": {"nameDe": "Deutschland"},
+                      "created": "2026-07-10T13:31:00+02:00",
+                      "description": "<div>Java, Spring Boot und Kafka.</div>",
+                      "projectContractType": {"type": "contracting", "remoteInPercent": 100},
+                      "links": {"project": "/projekt/backend-entwickler-java-spring-boot"},
+                      "skills": [{"de": "Java"}, {"de": "Spring Boot"}]
+                    }
+                  ],
+                  "currentPage": 2
+                }
+                """;
+        JobSearchCriteria criteria = new JobSearchCriteria();
+        criteria.setKeyword("Java");
+
+        var offers = scanner.extractOffersFromAjaxResult(json, "https://www.freelancermap.de/project/search/ajax", criteria);
+
+        assertThat(offers).hasSize(1);
+        JobOffer offer = offers.getFirst();
+        assertThat(offer.getSourceJobId()).isEqualTo("3024633");
+        assertThat(offer.getTitle()).isEqualTo("Backend-Entwickler Java Spring Boot");
+        assertThat(offer.getCompany()).isEqualTo("Hays AG");
+        assertThat(offer.getLocation()).isEqualTo("Koeln, Deutschland");
+        assertThat(offer.getRemoteType()).isEqualTo(RemoteType.REMOTE);
+        assertThat(offer.getJobUrl()).isEqualTo("https://www.freelancermap.de/projekt/backend-entwickler-java-spring-boot");
+        assertThat(offer.getDescription()).contains("Java, Spring Boot und Kafka.", "Skills: Java, Spring Boot");
+        assertThat(offer.getPublishedAt()).isEqualTo(java.time.OffsetDateTime
+                .parse("2026-07-10T13:31:00+02:00")
+                .toInstant());
+    }
+
+    @Test
     void extractsOriginalCreatedDateFromSearchResultCard() {
         String html = """
                 <html>

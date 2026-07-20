@@ -229,15 +229,54 @@ ADZUNA_COUNTRY=de
 Useful environment settings:
 
 ```bash
-FREELANCERMAP_MAX_PAGES=1
-FREELANCERMAP_MAX_DETAILS=10
-FREELANCERMAP_MAX_CANDIDATES=20
+FREELANCERMAP_MAX_PAGES=3
+FREELANCERMAP_MAX_DETAILS=50
+FREELANCERMAP_MAX_CANDIDATES=100
 FREELANCERMAP_MAX_PARALLEL_DETAIL_REQUESTS=6
 FREELANCERMAP_REQUEST_DELAY_MS=250
 FREELANCERMAP_REQUEST_TIMEOUT_SECONDS=15
+FREELANCERMAP_COOKIE_HEADER='paste browser Cookie header here when you need page 2+'
+FREELANCERMAP_COOKIE_FILE=.secrets/freelancermap-cookie.txt
+FREELANCERMAP_COOKIE_NAMES=REMEMBERME,PHPSESSID
 ```
 
+`FREELANCERMAP_MAX_DETAILS` limits how many detail pages are imported after candidates are collected. `FREELANCERMAP_MAX_CANDIDATES` should be higher than `FREELANCERMAP_MAX_DETAILS` because some candidate cards can be removed later by structured filters or failed detail parsing. The scanner fetches multiple freelancermap result pages with simple HTTP requests using `pagenr`.
+
 The freelancermap scanner sends `keyword` to freelancermap as the portal search query and trusts the returned result set for keyword relevance. Local filtering is only applied for structured fields such as remote type, contract type, and location.
+
+Freelancermap may return only the first result page for anonymous HTTP requests even when `pagenr=2` or `pagenr=3` is sent. In the browser this usually works because you are logged in and the request includes session cookies. To enable the same behavior without Playwright:
+
+1. Log in to freelancermap.de in your browser.
+2. Open DevTools, run a project search, and click page 2.
+3. Open the `/project/search/ajax?...pagenr=2` network request.
+4. Copy the full request cookie value. In `Copy as cURL`, this is the value after `-b '...'`; it is equivalent to the HTTP `Cookie` header.
+5. Start the backend with:
+
+```bash
+export FREELANCERMAP_COOKIE_HEADER='the copied Cookie header value'
+```
+
+The backend logs only whether a cookie is configured. It does not print the cookie value.
+
+For local development the file variant is easier and avoids shell quoting issues:
+
+```bash
+mkdir -p .secrets
+pbpaste > .secrets/freelancermap-cookie.txt
+export FREELANCERMAP_COOKIE_FILE=.secrets/freelancermap-cookie.txt
+./mvnw -pl backend spring-boot:run
+```
+
+The `.secrets/` directory is ignored by git.
+
+Only `REMEMBERME` or `PHPSESSID` is required for freelancermap pagination in current tests. The scanner filters the full copied cookie string to `REMEMBERME,PHPSESSID` by default, so analytics and consent cookies are not sent. `PHPSESSID` is a session cookie and changes more often. `REMEMBERME` is more persistent, but treat it like a login secret.
+
+If page 2 still returns the first 22 projects, right-click the same browser network request and choose `Copy` -> `Copy as cURL`. Compare the copied request with the backend log URL. The important parts are:
+
+- request URL contains `pagenr=2`
+- request body is exactly `{"changed":["pagenr"]}`
+- request includes the logged-in cookie, shown by cURL as `-b '...'`
+- `Referer` is the previous search page URL
 
 ## Sending Applications With Freelancermap
 
@@ -264,7 +303,7 @@ First run:
 1. Generate or open an Anschreiben draft for a freelancermap job.
 2. Click `Send application with CV` in the app.
 3. A Chromium window opens. If freelancermap asks for login, log in manually.
-4. The sender opens the application form, fills the Anschreiben, selects an existing CV option when detected, and submits after the frontend click.
+4. The sender opens the application form, fills the Anschreiben, selects an existing CV option and required document checkboxes when detected, and submits after the frontend click.
 
 Useful sender settings:
 
@@ -276,7 +315,10 @@ FREELANCERMAP_PLAYWRIGHT_BROWSER_CHANNEL=chrome
 FREELANCERMAP_PLAYWRIGHT_TIMEOUT_SECONDS=180
 FREELANCERMAP_MANUAL_LOGIN_TIMEOUT_SECONDS=300
 FREELANCERMAP_SUBMIT_ENABLED=true
+FREELANCERMAP_REQUIRED_DOCUMENT_LABELS=Lebenslauf_10.07.26.pdf
 ```
+
+`FREELANCERMAP_REQUIRED_DOCUMENT_LABELS` is a comma-separated list of existing freelancermap document labels that must be selected before sending. By default the sender selects `Lebenslauf_10.07.26.pdf` in addition to the generic CV checkbox/radio it already tries to select.
 
 If you prefer to use your installed Google Chrome instead of Playwright Chromium, set:
 

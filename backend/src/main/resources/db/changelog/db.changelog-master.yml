@@ -152,6 +152,35 @@ databaseChangeLog:
             columnName: job_url
             newDataType: VARCHAR(1000)
   - changeSet:
+      id: 001-add-job-offer-source-job-id
+      author: oleksandr-prognimak
+      changes:
+        - addColumn:
+            schemaName: ${db-schema}
+            tableName: job_offer
+            columns:
+              - column:
+                  name: source_job_id
+                  type: VARCHAR(120)
+        - createIndex:
+            schemaName: ${db-schema}
+            tableName: job_offer
+            indexName: idx_job_offer_source_job_id
+            columns:
+              - column:
+                  name: source
+              - column:
+                  name: source_job_id
+      rollback:
+        - dropIndex:
+            schemaName: ${db-schema}
+            tableName: job_offer
+            indexName: idx_job_offer_source_job_id
+        - dropColumn:
+            schemaName: ${db-schema}
+            tableName: job_offer
+            columnName: source_job_id
+  - changeSet:
       id: 002-create-application-draft
       author: oleksandr-prognimak
       changes:

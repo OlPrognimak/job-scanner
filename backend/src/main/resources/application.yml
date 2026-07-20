@@ -40,6 +40,7 @@ job-scanner:
       browser-channel: ${FREELANCERMAP_PLAYWRIGHT_BROWSER_CHANNEL:}
       headless: ${FREELANCERMAP_PLAYWRIGHT_HEADLESS:false}
       submit-enabled: ${FREELANCERMAP_SUBMIT_ENABLED:true}
+      required-document-labels: ${FREELANCERMAP_REQUIRED_DOCUMENT_LABELS:Lebenslauf_10.07.26.pdf}
       slow-mo-ms: ${FREELANCERMAP_PLAYWRIGHT_SLOW_MO_MS:100}
       timeout-seconds: ${FREELANCERMAP_PLAYWRIGHT_TIMEOUT_SECONDS:180}
       manual-login-timeout-seconds: ${FREELANCERMAP_MANUAL_LOGIN_TIMEOUT_SECONDS:300}
@@ -49,19 +50,22 @@ job-scanner:
       base-url: ${FREELANCERMAP_BASE_URL:https://www.freelancermap.de}
       search-path: ${FREELANCERMAP_SEARCH_PATH:/projekte}
       enabled: ${FREELANCERMAP_ENABLED:true}
-      max-pages: ${FREELANCERMAP_MAX_PAGES:1}
-      max-details: ${FREELANCERMAP_MAX_DETAILS:25}
-      max-candidates: ${FREELANCERMAP_MAX_CANDIDATES:20}
+      max-pages: ${FREELANCERMAP_MAX_PAGES:3}
+      max-details: ${FREELANCERMAP_MAX_DETAILS:50}
+      max-candidates: ${FREELANCERMAP_MAX_CANDIDATES:100}
       max-parallel-detail-requests: ${FREELANCERMAP_MAX_PARALLEL_DETAIL_REQUESTS:6}
       request-delay-ms: ${FREELANCERMAP_REQUEST_DELAY_MS:250}
       request-timeout-seconds: ${FREELANCERMAP_REQUEST_TIMEOUT_SECONDS:15}
-      user-agent: ${FREELANCERMAP_USER_AGENT:Mozilla/5.0 JobScannerBot/1.0}
+      user-agent: ${FREELANCERMAP_USER_AGENT:Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36}
+      cookie-header: ${FREELANCERMAP_COOKIE_HEADER:}
+      cookie-file: ${FREELANCERMAP_COOKIE_FILE:}
+      cookie-names: ${FREELANCERMAP_COOKIE_NAMES:REMEMBERME,PHPSESSID}
     glassdoor:
       base-url: ${GLASSDOOR_BASE_URL:https://www.glassdoor.de}
       search-path: ${GLASSDOOR_SEARCH_PATH:/Job/jobs.htm}
       enabled: ${GLASSDOOR_ENABLED:true}
       max-pages: ${GLASSDOOR_MAX_PAGES:1}
-      max-details: ${GLASSDOOR_MAX_DETAILS:25}
+      max-details: ${GLASSDOOR_MAX_DETAILS:50}
       max-candidates: ${GLASSDOOR_MAX_CANDIDATES:40}
       max-parallel-detail-requests: ${GLASSDOOR_MAX_PARALLEL_DETAIL_REQUESTS:4}
       request-delay-ms: ${GLASSDOOR_REQUEST_DELAY_MS:1000}
@@ -82,7 +86,7 @@ job-scanner:
       enabled: ${ARBEITSAGENTUR_ENABLED:true}
       max-pages: ${ARBEITSAGENTUR_MAX_PAGES:1}
       results-per-page: ${ARBEITSAGENTUR_RESULTS_PER_PAGE:25}
-      max-details: ${ARBEITSAGENTUR_MAX_DETAILS:25}
+      max-details: ${ARBEITSAGENTUR_MAX_DETAILS:50}
       max-parallel-detail-requests: ${ARBEITSAGENTUR_MAX_PARALLEL_DETAIL_REQUESTS:6}
       request-timeout-seconds: ${ARBEITSAGENTUR_REQUEST_TIMEOUT_SECONDS:20}
       published-within-days: ${ARBEITSAGENTUR_PUBLISHED_WITHIN_DAYS:100}
@@ -91,7 +95,7 @@ job-scanner:
       search-path: ${MEINESTADT_SEARCH_PATH:/deutschland}
       enabled: ${MEINESTADT_ENABLED:true}
       max-pages: ${MEINESTADT_MAX_PAGES:1}
-      max-details: ${MEINESTADT_MAX_DETAILS:20}
+      max-details: ${MEINESTADT_MAX_DETAILS:50}
       max-candidates: ${MEINESTADT_MAX_CANDIDATES:30}
       max-parallel-detail-requests: ${MEINESTADT_MAX_PARALLEL_DETAIL_REQUESTS:4}
       request-delay-ms: ${MEINESTADT_REQUEST_DELAY_MS:500}

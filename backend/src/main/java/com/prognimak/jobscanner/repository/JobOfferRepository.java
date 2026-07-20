@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface JobOfferRepository extends JpaRepository<JobOffer, Long> {
 
     Optional<JobOffer> findByJobUrl(String jobUrl);
+
+    Optional<JobOffer> findBySourceAndSourceJobId(String source, String sourceJobId);
 }

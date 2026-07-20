@@ -8,6 +8,7 @@ frontend/tsconfig.tsbuildinfo
 !**/src/test/**/target/
 .kotlin
 .playwright/
+.secrets/
 
 ### IntelliJ IDEA ###
 .idea/modules.xml

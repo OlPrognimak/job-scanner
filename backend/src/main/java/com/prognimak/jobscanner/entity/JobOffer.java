@@ -22,6 +22,9 @@ public class JobOffer {
     @Column(nullable = false)
     private String source;
 
+    @Column(name = "source_job_id")
+    private String sourceJobId;
+
     @Column(nullable = false, columnDefinition = "text")
     private String title;
 
@@ -73,6 +76,14 @@ public class JobOffer {
 
     public void setSource(String source) {
         this.source = source;
+    }
+
+    public String getSourceJobId() {
+        return sourceJobId;
+    }
+
+    public void setSourceJobId(String sourceJobId) {
+        this.sourceJobId = sourceJobId;
     }
 
     public String getTitle() {

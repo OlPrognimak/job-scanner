@@ -6,6 +6,7 @@ export type DraftStatus = 'DRAFT' | 'APPROVED' | 'SENT' | 'FAILED'
 export interface JobOffer {
   id: number
   source: string
+  sourceJobId?: string
   title: string
   company?: string
   location?: string

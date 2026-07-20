@@ -70,6 +70,7 @@ public class FreelancermapApplicationSender implements ApplicationSender {
                 log.warn("No existing CV checkbox/radio could be selected on freelancermap page for draft {}",
                         draft.getId());
             }
+            selectRequiredDocuments(page);
             acceptDataPrivacyIfPresent(page);
             submitApplication(page);
             log.info("Freelancermap application flow finished for draft {} and job {}",
@@ -195,6 +196,83 @@ public class FreelancermapApplicationSender implements ApplicationSender {
                 }
                 """);
         return Boolean.TRUE.equals(selected);
+    }
+
+    private void selectRequiredDocuments(Page page) {
+        for (String label : requiredDocumentLabels()) {
+            if (selectDocumentByLabel(page, label)) {
+                log.info("Selected freelancermap application document '{}'.", label);
+                continue;
+            }
+            throw new IllegalStateException("Could not select freelancermap application document: " + label);
+        }
+    }
+
+    private List<String> requiredDocumentLabels() {
+        if (!hasText(properties.getRequiredDocumentLabels())) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(properties.getRequiredDocumentLabels().split(","))
+                .map(String::trim)
+                .filter(label -> !label.isBlank())
+                .toList();
+    }
+
+    private boolean selectDocumentByLabel(Page page, String label) {
+        for (Frame frame : page.frames()) {
+            if (selectDocumentByLabelInFrame(frame, label)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean selectDocumentByLabelInFrame(Frame frame, String label) {
+        try {
+            Object result = frame.evaluate("""
+                    (requiredLabel) => {
+                      const normalize = (value) => (value || '')
+                        .toLowerCase()
+                        .replace(/\\s+/g, ' ')
+                        .trim();
+                      const expected = normalize(requiredLabel);
+                      const inputs = Array.from(document.querySelectorAll('input[type="checkbox"], input[type="radio"]'));
+                      const textFor = (input) => {
+                        const texts = [];
+                        const wrappingLabel = input.closest('label');
+                        if (wrappingLabel) texts.push(wrappingLabel.innerText || '');
+                        if (input.id) {
+                          const explicit = Array.from(document.querySelectorAll('label'))
+                            .find(labelElement => labelElement.htmlFor === input.id);
+                          if (explicit) texts.push(explicit.innerText || '');
+                        }
+                        const container = input.closest('li, .form-check, .checkbox, .radio, .document, .attachment, .file, .row, div');
+                        if (container) texts.push(container.innerText || '');
+                        texts.push(input.getAttribute('aria-label') || '');
+                        texts.push(input.getAttribute('name') || '');
+                        texts.push(input.getAttribute('value') || '');
+                        return normalize(texts.join(' '));
+                      };
+                      const matching = inputs.find(input => textFor(input).includes(expected));
+                      if (!matching) {
+                        return false;
+                      }
+                      matching.scrollIntoView({ block: 'center', inline: 'center' });
+                      if (!matching.checked) {
+                        matching.click();
+                        if (!matching.checked) {
+                          matching.checked = true;
+                          matching.dispatchEvent(new Event('input', { bubbles: true }));
+                          matching.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                      }
+                      return matching.checked;
+                    }
+                    """, label);
+            return Boolean.TRUE.equals(result);
+        } catch (RuntimeException ignored) {
+            return false;
+        }
     }
 
     private void submitApplication(Page page) {

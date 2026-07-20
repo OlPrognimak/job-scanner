@@ -9,6 +9,7 @@ import java.time.Instant;
 public record JobOfferDto(
         Long id,
         String source,
+        String sourceJobId,
         String title,
         String company,
         String location,
